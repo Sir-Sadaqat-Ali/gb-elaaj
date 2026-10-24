@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Gb Elaaj — Health that travels with you</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="tokens.css"/>
+<style>
+  body { margin: 0; background: #f0eee9; font-family: var(--ge-font-sans); color: var(--ge-ink); }
+  * { box-sizing: border-box; }
+  /* Hide scrollbars inside artboards but allow scroll */
+  .ge-artboard-scope ::-webkit-scrollbar { width: 0; height: 0; }
+  .ge-artboard-scope { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="screens/home.jsx"></script>
+<script type="text/babel" src="screens/find.jsx"></script>
+<script type="text/babel" src="screens/profile.jsx"></script>
+<script type="text/babel" src="screens/patient.jsx"></script>
+<script type="text/babel" src="screens/dashboards.jsx"></script>
+<script type="text/babel" src="screens/system.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+  const { useState, useEffect } = React;
+
+  // Wrap each screen in a fixed-size frame so design-canvas can show them as artboards
+  function Frame({ w = 1440, h = 900, children, label }) {
+    return (
+      <div className="ge-artboard-scope" data-screen-label={label} style={{ width: w, height: h, overflow: 'auto', background: '#F4FAFF', position: 'relative' }}>
+        {children}
+      </div>
+    );
+  }
+
+  function App() {
+    return (
+      <DesignCanvas>
+        <DCSection id="hero" title="Hero screens" subtitle="The four flagship surfaces that tell the story of Gb Elaaj.">
+          <DCArtboard id="01-home" label="01 · Public Home" width={1440} height={900}>
+            <Frame label="01 Home" w={1440} h={900}><HomePage/></Frame>
+          </DCArtboard>
+          <DCArtboard id="02-find" label="02 · Find Doctors" width={1440} height={900}>
+            <Frame label="02 Find" w={1440} h={900}><FindDoctorsPage/></Frame>
+          </DCArtboard>
+          <DCArtboard id="03-profile" label="03 · Doctor Profile" width={1440} height={900}>
+            <Frame label="03 Profile" w={1440} h={900}><DoctorProfile/></Frame>
+          </DCArtboard>
+          <DCArtboard id="04-patient" label="04 · Patient Dashboard" width={1440} height={900}>
+            <Frame label="04 Patient" w={1440} h={900}><PatientDashboard/></Frame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="flow" title="Booking flow" subtitle="Four-step booking with persistent stepper and confirmation moment.">
+          <DCArtboard id="05-booking" label="05 · Booking · 4 steps" width={1440} height={900}>
+            <Frame label="05 Booking" w={1440} h={900}><BookingFlow/></Frame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="ops" title="Operator dashboards" subtitle="Role-tailored cockpits — same shell, different priorities.">
+          <DCArtboard id="06-doctor" label="06 · Doctor's day" width={1440} height={900}>
+            <Frame label="06 Doctor" w={1440} h={900}><DoctorDashboard/></Frame>
+          </DCArtboard>
+          <DCArtboard id="07-admin" label="07 · Super Admin" width={1440} height={900}>
+            <Frame label="07 Admin" w={1440} h={900}><AdminDashboard/></Frame>
+          </DCArtboard>
+          <DCArtboard id="08-pharmacy" label="08 · Pharmacy ops" width={1440} height={900}>
+            <Frame label="08 Pharmacy" w={1440} h={900}><PharmacyDashboard/></Frame>
+          </DCArtboard>
+          <DCArtboard id="09-lab" label="09 · Lab ops" width={1440} height={900}>
+            <Frame label="09 Lab" w={1440} h={900}><LabDashboard/></Frame>
+          </DCArtboard>
+          <DCArtboard id="10-nurse" label="10 · Home-care nurse" width={1440} height={900}>
+            <Frame label="10 Nurse" w={1440} h={900}><NurseDashboard/></Frame>
+          </DCArtboard>
+          <DCArtboard id="11-finance" label="11 · Finance" width={1440} height={900}>
+            <Frame label="11 Finance" w={1440} h={900}><FinanceDashboard/></Frame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="ds" title="Design system" subtitle="The brand foundation — color, type, components, voice.">
+          <DCArtboard id="12-system" label="12 · Design System" width={1280} height={1800}>
+            <Frame label="12 System" w={1280} h={1800}><DesignSystem/></Frame>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

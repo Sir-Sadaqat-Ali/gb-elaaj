@@ -1,0 +1,809 @@
+// ─────────────────────────────────────────────────────────────
+// Gb Elaaj — Prisma schema
+// 24 domain models + Auth.js tables
+// Money is stored in PAISA (PKR × 100) as Int. Format via lib/formatting.ts.
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────
+enum Role {
+  PATIENT
+  DOCTOR
+  PHARMACY_ADMIN
+  LAB_ADMIN
+  NURSE
+  FINANCE
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  SUSPENDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum DoctorVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ConsultMode {
+  VIDEO
+  CLINIC
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SlotStatus {
+  OPEN
+  HELD
+  BOOKED
+  BLOCKED
+}
+
+enum MedicalRecordType {
+  PRESCRIPTION
+  LAB_REPORT
+  VITAL
+  ALLERGY
+  CONDITION
+  VACCINATION
+  ATTACHMENT
+  NOTE
+}
+
+enum PharmacyOrderStatus {
+  PENDING_RX_REVIEW
+  CONFIRMED
+  PACKING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum LabBookingStatus {
+  BOOKED
+  COLLECTED
+  PROCESSING
+  REPORTED
+  CANCELLED
+}
+
+enum LabBookingMode {
+  HOME
+  WALK_IN
+}
+
+enum HomeCareStatus {
+  REQUESTED
+  ASSIGNED
+  EN_ROUTE
+  IN_VISIT
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionKind {
+  CONSULTATION
+  PHARMACY
+  LAB
+  HOME_CARE
+  REFUND
+  WITHDRAWAL
+  WALLET_TOPUP
+  COMMISSION_ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+  HOLD
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+// ── Auth.js core tables ──────────────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ── 1. User ──────────────────────────────────────────────────
+model User {
+  id            String     @id @default(cuid())
+  name          String
+  email         String?    @unique
+  emailVerified DateTime?
+  phone         String?    @unique
+  passwordHash  String?
+  // Password reset (Stage 2)
+  passwordResetTokenHash String?
+  passwordResetExpires   DateTime?
+  // Email verification (Stage 2)
+  emailVerifyTokenHash   String?
+  emailVerifyExpires     DateTime?
+  image         String?
+  role          Role       @default(PATIENT)
+  status        UserStatus @default(ACTIVE)
+  locale        String     @default("en")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  // role profiles
+  patient        PatientProfile?
+  doctor         DoctorProfile?
+  pharmacyAdmin  Pharmacy?         @relation("PharmacyOwner")
+  labAdmin       Lab?              @relation("LabOwner")
+  nurseProfile   NurseProfile?
+
+  // outgoing data (provider-side aggregated relations declared in those models)
+  reviewsWritten Review[]          @relation("ReviewAuthor")
+  notifications  Notification[]
+  auditLogs      AuditLog[]        @relation("AuditActor")
+  withdrawals    Withdrawal[]      @relation("WithdrawalProvider")
+
+  // payments where this user is the payer
+  paymentsAsPayer Transaction[]    @relation("TransactionPayer")
+
+  @@index([role])
+  @@index([status])
+}
+
+// ── 2. PatientProfile ────────────────────────────────────────
+model PatientProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dob         DateTime?
+  gender      Gender?
+  bloodType   String?
+  cityId      String?
+  city        City?     @relation(fields: [cityId], references: [id])
+  addressLine String?
+
+  appointments    Appointment[]
+  medicalRecords  MedicalRecord[]
+  reviewsAuthored Review[]              @relation("ReviewPatient")
+  pharmacyOrders  PharmacyOrder[]
+  labBookings     LabBooking[]
+  homeCareRequests HomeCareRequest[]
+  savedDoctors    SavedDoctor[]
+}
+
+// ── 3. DoctorProfile ─────────────────────────────────────────
+model DoctorProfile {
+  id              String                   @id @default(cuid())
+  userId          String                   @unique
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug            String                   @unique
+  pmdcNumber      String                   @unique
+  qualifications  String
+  bioEn           String                   @db.Text
+  bioUr           String?                  @db.Text
+  experienceYears Int                      @default(0)
+  consultFeePaisa Int                      @default(0) // video fee
+  clinicFeePaisa  Int                      @default(0)
+  cityId          String
+  city            City                     @relation(fields: [cityId], references: [id])
+  clinic          String?
+  languages       String[]                 @default([])
+  ratingAvg       Float                    @default(0)
+  ratingCount     Int                      @default(0)
+  satisfactionPct Int                      @default(0)
+  verifiedStatus  DoctorVerificationStatus @default(PENDING)
+  verifiedAt      DateTime?
+  verifiedNote    String?
+  // PMDC document — uploaded by doctor at registration, reviewed by admin
+  pmdcDocKey      String?
+  pmdcDocMime     String?
+  pmdcDocSize     Int?
+  modes           ConsultMode[]            @default([VIDEO])
+  active          Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+
+  specialties   DoctorSpecialty[]
+  availability  DoctorAvailability[]
+  appointments  Appointment[]
+  reviews       Review[]
+  prescriptions MedicalRecord[]      @relation("DoctorRecords")
+  savedBy       SavedDoctor[]
+  rxTemplates   PrescriptionTemplate[]
+
+  @@index([cityId])
+  @@index([verifiedStatus])
+  @@index([active])
+}
+
+// ── Saved / favourite doctors ────────────────────────────────
+model SavedDoctor {
+  id        String         @id @default(cuid())
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    DoctorProfile  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([patientId, doctorId])
+  @@index([patientId])
+}
+
+// ── Prescription templates (per-doctor, reusable) ────────────
+model PrescriptionTemplate {
+  id        String        @id @default(cuid())
+  doctorId  String
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  name      String
+  diagnosis String
+  notes     String?       @db.Text
+  lines     Json          // [{ drug, strength?, frequency, durationDays, notes? }]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([doctorId])
+}
+
+// ── 4. Specialty ─────────────────────────────────────────────
+model Specialty {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  nameEn    String
+  nameUr    String?
+  iconKey   String?
+  active    Boolean @default(true)
+
+  doctors   DoctorSpecialty[]
+}
+
+model DoctorSpecialty {
+  doctorId    String
+  specialtyId String
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialty   Specialty     @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@id([doctorId, specialtyId])
+  @@index([specialtyId])
+}
+
+// ── 5. City ──────────────────────────────────────────────────
+model City {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  nameEn   String
+  nameUr   String?
+  province String?
+  active   Boolean @default(true)
+
+  doctors           DoctorProfile[]
+  patients          PatientProfile[]
+  pharmacies        Pharmacy[]
+  labs              Lab[]
+  nurses            NurseProfile[]
+}
+
+// ── 6. Appointment ───────────────────────────────────────────
+model Appointment {
+  id            String            @id @default(cuid())
+  patientId     String
+  patient       PatientProfile    @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        DoctorProfile     @relation(fields: [doctorId], references: [id])
+  slotId        String?           @unique
+  slot          DoctorAvailability? @relation(fields: [slotId], references: [id])
+
+  mode          ConsultMode
+  status        AppointmentStatus @default(PENDING)
+  feePaisa      Int
+  symptoms      String?           @db.Text
+  cancelReason  String?
+
+  videoRoomId   String?           // 100ms / Daily room id
+  videoJoinUrl  String?
+
+  scheduledFor  DateTime
+  durationMin   Int               @default(20)
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  transaction   Transaction?
+  review        Review?
+  records       MedicalRecord[]   @relation("AppointmentRecords")
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledFor])
+  @@index([status])
+}
+
+// ── 7. DoctorAvailability ────────────────────────────────────
+model DoctorAvailability {
+  id          String       @id @default(cuid())
+  doctorId    String
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  mode        ConsultMode
+  status      SlotStatus   @default(OPEN)
+  appointment Appointment?
+
+  @@unique([doctorId, startsAt, mode])
+  @@index([doctorId])
+  @@index([startsAt])
+  @@index([status])
+}
+
+// ── 8. MedicalRecord ─────────────────────────────────────────
+model MedicalRecord {
+  id           String              @id @default(cuid())
+  patientId    String
+  patient      PatientProfile      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type         MedicalRecordType
+  title        String
+  body         String?             @db.Text
+  data         Json?               // structured payload (e.g., vitals, Rx lines)
+  // Storage key (private R2/S3); resolve via /api/files/[id]/download?kind=medical-record
+  fileKey      String?
+  fileMime     String?
+  fileSize     Int?
+
+  appointmentId String?
+  appointment   Appointment?       @relation("AppointmentRecords", fields: [appointmentId], references: [id])
+
+  doctorId     String?
+  doctor       DoctorProfile?      @relation("DoctorRecords", fields: [doctorId], references: [id])
+
+  recordedAt   DateTime            @default(now())
+  createdAt    DateTime            @default(now())
+
+  @@index([patientId])
+  @@index([type])
+}
+
+// ── 9. Review ────────────────────────────────────────────────
+model Review {
+  id            String   @id @default(cuid())
+  appointmentId String   @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patientId     String
+  patient       PatientProfile @relation("ReviewPatient", fields: [patientId], references: [id])
+  doctorId      String
+  doctor        DoctorProfile  @relation(fields: [doctorId], references: [id])
+  authorUserId  String
+  author        User           @relation("ReviewAuthor", fields: [authorUserId], references: [id])
+  rating        Int            // 1..5
+  text          String?        @db.Text
+  reply         String?        @db.Text
+  createdAt     DateTime       @default(now())
+
+  @@index([doctorId])
+}
+
+// ── 10. Pharmacy ─────────────────────────────────────────────
+model Pharmacy {
+  id        String  @id @default(cuid())
+  ownerUserId String  @unique
+  owner     User    @relation("PharmacyOwner", fields: [ownerUserId], references: [id])
+  name      String
+  slug      String  @unique
+  cityId    String
+  city      City    @relation(fields: [cityId], references: [id])
+  license   String  @unique
+  verified  Boolean @default(false)
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  medicines Medicine[]
+  orders    PharmacyOrder[]
+}
+
+// ── 11. Medicine ─────────────────────────────────────────────
+model Medicine {
+  id              String    @id @default(cuid())
+  pharmacyId      String
+  pharmacy        Pharmacy  @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  sku             String
+  nameGeneric     String
+  nameBrand       String?
+  form            String?    // tablet, syrup, injection
+  strength        String?    // 500mg
+  manufacturer    String?
+  pricePaisa      Int
+  mrpPaisa        Int
+  stock           Int       @default(0)
+  reorderLevel    Int       @default(20)
+  rxRequired      Boolean   @default(false)
+  expiry          DateTime?
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  orderItems PharmacyOrderItem[]
+
+  @@unique([pharmacyId, sku])
+  @@index([pharmacyId])
+  @@index([rxRequired])
+}
+
+// ── 12. PharmacyOrder ────────────────────────────────────────
+model PharmacyOrder {
+  id              String              @id @default(cuid())
+  patientId       String
+  patient         PatientProfile      @relation(fields: [patientId], references: [id])
+  pharmacyId      String
+  pharmacy        Pharmacy            @relation(fields: [pharmacyId], references: [id])
+  status          PharmacyOrderStatus @default(PENDING_RX_REVIEW)
+  // Storage key (private R2/S3); resolve via /api/files/[id]/download?kind=prescription
+  prescriptionKey  String?
+  prescriptionMime String?
+  prescriptionSize Int?
+  subtotalPaisa   Int                 @default(0)
+  deliveryPaisa   Int                 @default(0)
+  totalPaisa      Int                 @default(0)
+  addressLine     String?
+  cityName        String?
+  notes           String?
+  placedAt        DateTime            @default(now())
+  deliveredAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  items       PharmacyOrderItem[]
+  transaction Transaction?
+
+  @@index([patientId])
+  @@index([pharmacyId])
+  @@index([status])
+}
+
+// ── 13. PharmacyOrderItem ────────────────────────────────────
+model PharmacyOrderItem {
+  id           String          @id @default(cuid())
+  orderId      String
+  order        PharmacyOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  medicineId   String
+  medicine     Medicine        @relation(fields: [medicineId], references: [id])
+  qty          Int
+  unitPaisa    Int
+  totalPaisa   Int
+
+  @@index([orderId])
+}
+
+// ── 14. Lab ──────────────────────────────────────────────────
+model Lab {
+  id          String   @id @default(cuid())
+  ownerUserId String   @unique
+  owner       User     @relation("LabOwner", fields: [ownerUserId], references: [id])
+  name        String
+  slug        String   @unique
+  cityId      String
+  city        City     @relation(fields: [cityId], references: [id])
+  license     String   @unique
+  verified    Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tests    LabTest[]
+  bookings LabBooking[]
+}
+
+// ── 15. LabTest ──────────────────────────────────────────────
+model LabTest {
+  id              String  @id @default(cuid())
+  labId           String
+  lab             Lab     @relation(fields: [labId], references: [id], onDelete: Cascade)
+  slug            String
+  nameEn          String
+  nameUr          String?
+  description     String? @db.Text
+  sampleType      String? // blood, urine, stool, swab
+  fastingRequired Boolean @default(false)
+  turnaroundHrs   Int     @default(24)
+  pricePaisa      Int
+  homeEligible    Boolean @default(true)
+  active          Boolean @default(true)
+
+  bookings LabBooking[]
+
+  @@unique([labId, slug])
+  @@index([labId])
+}
+
+// ── 16. LabBooking ───────────────────────────────────────────
+model LabBooking {
+  id            String           @id @default(cuid())
+  patientId     String
+  patient       PatientProfile   @relation(fields: [patientId], references: [id])
+  labId         String
+  lab           Lab              @relation(fields: [labId], references: [id])
+  testId        String
+  test          LabTest          @relation(fields: [testId], references: [id])
+  status        LabBookingStatus @default(BOOKED)
+  mode          LabBookingMode   @default(HOME)
+  scheduledFor  DateTime
+  addressLine   String?
+  pricePaisa    Int
+  collectedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  report      LabReport?
+  transaction Transaction?
+
+  @@index([patientId])
+  @@index([labId])
+  @@index([status])
+}
+
+// ── 17. LabReport ────────────────────────────────────────────
+model LabReport {
+  id          String     @id @default(cuid())
+  bookingId   String     @unique
+  booking     LabBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  // Storage key (private R2/S3); resolve via /api/files/[id]/download?kind=lab-report
+  fileKey     String?
+  fileMime    String?
+  fileSize    Int?
+  results     Json?      // structured parameters [{ name, value, unit, range, flag }]
+  abnormal    Boolean    @default(false)
+  uploadedAt  DateTime   @default(now())
+  signedById  String?    // doctor id who reviewed
+}
+
+// ── 18. NurseProfile ─────────────────────────────────────────
+model NurseProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level        String   @default("JUNIOR") // JUNIOR | SENIOR
+  cityId       String
+  city         City     @relation(fields: [cityId], references: [id])
+  ratingAvg    Float    @default(0)
+  verified     Boolean  @default(false)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  assignments HomeCareRequest[] @relation("NurseAssignment")
+  locations   NurseLocation[]
+}
+
+// ── 19. HomeCareRequest ──────────────────────────────────────
+model HomeCareRequest {
+  id            String         @id @default(cuid())
+  patientId     String
+  patient       PatientProfile @relation(fields: [patientId], references: [id])
+  nurseId       String?
+  nurse         NurseProfile?  @relation("NurseAssignment", fields: [nurseId], references: [id])
+  serviceName   String
+  description   String?        @db.Text
+  status        HomeCareStatus @default(REQUESTED)
+  scheduledFor  DateTime
+  durationMin   Int            @default(60)
+  addressLine   String
+  // Cached coords of the request address — set once on create or assign via geocode.
+  // Routing + ETA depend on these; null is acceptable (route just won't render).
+  addressLat    Float?
+  addressLng    Float?
+  pricePaisa    Int
+  notes         String?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  // Snapshot of the latest NurseLocation for fast "where is the nurse" reads.
+  // The full ping history lives in the NurseLocation table.
+  lastNurseLat   Float?
+  lastNurseLng   Float?
+  lastLocationAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  transaction Transaction?
+  locations   NurseLocation[]
+
+  @@index([patientId])
+  @@index([nurseId])
+  @@index([status])
+}
+
+// ── 19a. NurseLocation — time-series GPS pings ───────────────
+// Captured only during active home-care visits (status ∈ ASSIGNED, EN_ROUTE,
+// IN_VISIT). Retention: rows older than the request's endedAt + 7 days are
+// deleted by the privacy cron (see LOCATION_PRIVACY_AND_SECURITY.md).
+model NurseLocation {
+  id                String          @id @default(cuid())
+  nurseId           String
+  nurse             NurseProfile    @relation(fields: [nurseId], references: [id], onDelete: Cascade)
+  homeCareRequestId String
+  request           HomeCareRequest @relation(fields: [homeCareRequestId], references: [id], onDelete: Cascade)
+  latitude          Float
+  longitude         Float
+  accuracy          Float?           // meters
+  heading           Float?           // degrees 0-360
+  speed             Float?           // m/s
+  source            String          @default("browser") // browser | manual
+  createdAt         DateTime        @default(now())
+
+  @@index([homeCareRequestId, createdAt])
+  @@index([nurseId, createdAt])
+}
+
+// ── 20. Transaction ──────────────────────────────────────────
+model Transaction {
+  id              String            @id @default(cuid())
+  kind            TransactionKind
+  status          TransactionStatus @default(PENDING)
+  grossPaisa      Int
+  commissionPaisa Int               @default(0)
+  netPaisa        Int               @default(0)
+  currency        String            @default("PKR")
+  provider        String?           // stripe | jazzcash | easypaisa | wallet
+  providerRef     String?           @unique
+  payerUserId     String?
+  payer           User?             @relation("TransactionPayer", fields: [payerUserId], references: [id])
+  providerRole    Role?             // who earns the net (DOCTOR | PHARMACY_ADMIN | LAB_ADMIN | NURSE)
+  providerId      String?           // role-profile id
+
+  appointmentId    String?       @unique
+  appointment      Appointment?  @relation(fields: [appointmentId], references: [id])
+  pharmacyOrderId  String?       @unique
+  pharmacyOrder    PharmacyOrder? @relation(fields: [pharmacyOrderId], references: [id])
+  labBookingId     String?       @unique
+  labBooking       LabBooking?   @relation(fields: [labBookingId], references: [id])
+  homeCareId       String?       @unique
+  homeCare         HomeCareRequest? @relation(fields: [homeCareId], references: [id])
+
+  createdAt   DateTime @default(now())
+  capturedAt  DateTime?
+
+  @@index([kind])
+  @@index([status])
+  @@index([providerRole, providerId])
+}
+
+// ── 21. Withdrawal ───────────────────────────────────────────
+model Withdrawal {
+  id            String           @id @default(cuid())
+  providerUserId String
+  provider      User             @relation("WithdrawalProvider", fields: [providerUserId], references: [id])
+  providerRole  Role
+  amountPaisa   Int
+  bankName      String
+  accountTitle  String
+  accountNumber String
+  status        WithdrawalStatus @default(REQUESTED)
+  reason        String?
+  approvedById  String?
+  approvedAt    DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([providerUserId])
+  @@index([status])
+}
+
+// ── 22. Notification ─────────────────────────────────────────
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  body      String              @db.Text
+  href      String?
+  payload   Json?
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@index([userId])
+  @@index([readAt])
+}
+
+// ── 23. AuditLog ─────────────────────────────────────────────
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action       String
+  targetType   String?
+  targetId     String?
+  meta         Json?
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+// ── 24. PlatformSetting ──────────────────────────────────────
+model PlatformSetting {
+  id                  String  @id @default("singleton")
+  // commission stored in basis points (1500 = 15%)
+  commissionBps       Int     @default(1500)
+  // per-kind overrides — JSON shape: { PHARMACY: 800, LAB: 1200, HOME_CARE: 1500 }
+  commissionOverrides Json?
+  currency            String  @default("PKR")
+  slotMinutes         Int     @default(20)
+  reminderHoursBefore Int     @default(2)
+  maintenanceMode     Boolean @default(false)
+  appName             String  @default("Gb Elaaj")
+  supportEmail        String  @default("support@gbelaaj.pk")
+  supportPhone        String  @default("+92 311 1234567")
+  updatedAt           DateTime @updatedAt
+}

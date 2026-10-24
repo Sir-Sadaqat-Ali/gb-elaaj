@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.vercel/
+out/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.turbo/
+coverage/
+prisma/migrations/**/migration_lock.toml
+!prisma/migrations/**
+.vercel
+*.tsbuildinfo

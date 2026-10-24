@@ -1,0 +1,111 @@
+@import "../styles/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv02", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+  /* Focus ring — applied to every interactive element */
+  :where(button, a, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
+    outline: 2px solid var(--ge-primary);
+    outline-offset: 2px;
+    border-radius: var(--ge-r-sm);
+  }
+  /* Selection */
+  ::selection {
+    background: color-mix(in srgb, var(--ge-primary) 28%, transparent);
+    color: var(--ge-ink);
+  }
+}
+
+@layer components {
+  /* Display heading — Poppins (Curenast). Slightly taller line-height than the
+     old serif so descenders don't clip; used by public + portal page titles. */
+  .ge-display {
+    @apply font-display font-semibold;
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+  }
+
+  /* Public marketing container — 1120px. Portals keep Tailwind's `container`. */
+  .ge-container {
+    width: 100%;
+    margin-inline: auto;
+    max-width: 1120px;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .ge-container { padding-inline: 2rem; }
+  }
+
+  /* Curenast pill eyebrow — replaces the uppercase micro-label on public pages */
+  .ge-eyebrow-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-ge-border bg-white px-4 py-1.5 text-[13px] font-medium text-ge-ink;
+  }
+
+  /* Cheap scroll-reveal (paired with useInView). Killed by reduced-motion below. */
+  .ge-fade-up {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.4s var(--ge-ease-out), transform 0.4s var(--ge-ease-out);
+  }
+  .ge-fade-up[data-shown="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Hairline — replaces dashed dividers */
+  .ge-hairline {
+    @apply border-t border-ge-border;
+  }
+
+  /* Card surface */
+  .ge-card {
+    @apply bg-white border border-ge-border rounded-lg shadow-xs;
+  }
+
+  /* KPI shell */
+  .ge-kpi {
+    @apply ge-card p-5;
+  }
+
+  /* Sidebar nav item */
+  .ge-nav-item {
+    @apply flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-ge-muted rounded-md transition;
+  }
+  .ge-nav-item:hover {
+    @apply bg-ge-soft-bg text-ge-ink;
+  }
+  .ge-nav-item[data-active="true"] {
+    @apply bg-white text-ge-primary border border-ge-border shadow-xs;
+  }
+
+  /* Mono numerics */
+  .ge-mono {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Skeleton */
+  .ge-skel {
+    @apply animate-shimmer rounded;
+    background: linear-gradient(
+      90deg,
+      hsl(210 50% 96%) 0%,
+      hsl(210 100% 99.4%) 50%,
+      hsl(210 50% 96%) 100%
+    );
+    background-size: 800px 100%;
+  }
+}

@@ -1,0 +1,84 @@
+/* ─────────────────────────────────────────────────────────────
+   Gb Elaaj — Brand tokens
+   Locked palette per PROJECT_PLAN.md §1
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Brand — GE trust-blue primary (unchanged), Curenast-inspired neutrals */
+  --ge-primary:        #0B84FE;
+  --ge-primary-2:      #3499FE;
+  --ge-primary-3:      #67B2FE;
+  --ge-bg-blue:        #BFDCFA;
+  --ge-navy:           #0A2540;
+  --ge-ink:            #111827;
+  --ge-muted:          #5E6B7C;
+  --ge-white:          #FFFFFF;
+  --ge-border:         #E6EAF0;
+  --ge-soft-bg:        #F5F7FA;
+  --ge-blue-tint:      #EDF3FF;   /* soft blue section ground (Curenast atmosphere) */
+  --ge-star:           #F5A623;   /* rating stars only */
+
+  /* Warm accent — Curenast orange. PUBLIC FUNNEL ONLY, at most twice per
+     viewport (one CTA or one badge). Never inside portals or StatusChip. */
+  --ge-accent:         #FF6B3D;
+  --ge-accent-bg:      #FFF1EB;
+  --ge-chip-bg:        #F3F4F6;
+
+  /* Status — semantic only */
+  --ge-success:        #0E9F6E;
+  --ge-success-bg:     #E8F7F1;
+  --ge-success-border: #BEEBD9;
+  --ge-warning:        #C28220;
+  --ge-warning-bg:     #FBF3E2;
+  --ge-warning-border: #F0D9A4;
+  --ge-danger:         #D03B3A;
+  --ge-danger-bg:      #FBEAEA;
+  --ge-danger-border:  #F4C2C2;
+
+  /* shadcn-compatible HSL slots — hand-synced to the ge-* hexes above.
+     If you change a brand/neutral hex, re-derive its HSL slot here too. */
+  --background: 216 33% 99%;        /* #F5F7FA-ish canvas */
+  --foreground: 220 26% 11%;        /* #111827 */
+  --card: 0 0% 100%;
+  --card-foreground: 220 26% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 26% 11%;
+  --primary: 211 99% 52%;           /* #0B84FE — unchanged */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 216 33% 97%;
+  --secondary-foreground: 220 26% 11%;
+  --muted: 216 25% 97%;             /* #F5F7FA */
+  --muted-foreground: 214 14% 43%;  /* #5E6B7C */
+  --accent: 216 33% 96%;
+  --accent-foreground: 220 26% 11%;
+  --destructive: 0 64% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 216 25% 92%;            /* #E6EAF0 */
+  --input: 216 25% 92%;
+  --ring: 211 99% 52%;
+
+  /* Spacing & radius — tight architectural system */
+  --ge-r-xs: 6px;
+  --ge-r-sm: 8px;
+  --ge-r-md: 12px;
+  --ge-r-lg: 14px;
+  --ge-r-xl: 18px;
+  --ge-r-full: 999px;
+
+  /* Motion */
+  --ge-ease: cubic-bezier(.2, .8, .2, 1);
+  --ge-ease-out: cubic-bezier(.16, 1, .3, 1);
+}
+
+/* RTL hook — Urdu */
+[dir="rtl"] {
+  font-family: var(--font-nastaliq), ui-serif, system-ui;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

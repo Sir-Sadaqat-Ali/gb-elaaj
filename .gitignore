@@ -1,0 +1,25 @@
+# OS
+.DS_Store
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts (web/.gitignore has its own)
+node_modules/
+.next/
+.vercel/
+out/
+dist/
+.turbo/
+coverage/
+
+# Env files (per-folder rules also exist in web/.gitignore)
+.env
+.env.local
+.env.*.local
+
+# Claude scratch
+.claude/
+.vercel

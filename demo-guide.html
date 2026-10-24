@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gb Elaaj — Video Walkthrough & Demo Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  
+  @page {
+    size: A4;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1a202c;
+    background: #ffffff;
+    line-height: 1.5;
+    margin: 0;
+    padding: 24px;
+    font-size: 13px;
+  }
+  
+  .header {
+    border-bottom: 3px solid #0284c7;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.5px;
+  }
+  .header .tagline {
+    font-size: 13px;
+    color: #0284c7;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .header .badge {
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px dashed #e2e8f0;
+    font-size: 12px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #64748b; font-weight: 500; }
+  .info-val { font-weight: 600; color: #0f172a; font-family: monospace; font-size: 12px; }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px 0;
+    font-size: 12px;
+  }
+  th {
+    background: #0f172a;
+    color: #ffffff;
+    text-align: left;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  th:first-child { border-radius: 6px 0 0 0; }
+  th:last-child { border-radius: 0 6px 0 0; }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  
+  .role-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .pill-admin { background: #fee2e2; color: #991b1b; }
+  .pill-doc { background: #dcfce7; color: #166534; }
+  .pill-pat { background: #e0e7ff; color: #3730a3; }
+  .pill-pharm { background: #fef3c7; color: #92400e; }
+  .pill-lab { background: #f3e8ff; color: #6b21a8; }
+  .pill-nurse { background: #ccfbf1; color: #115e59; }
+  .pill-fin { background: #e2e8f0; color: #334155; }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    border-left: 4px solid #0284c7;
+    padding-left: 10px;
+    margin: 24px 0 14px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .scene-card {
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #0284c7;
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+  .scene-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .scene-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .scene-time {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .scene-body {
+    font-size: 12px;
+    color: #334155;
+    margin-bottom: 6px;
+  }
+  .scene-bullets {
+    margin: 4px 0 0 0;
+    padding-left: 18px;
+    font-size: 11.5px;
+    color: #475569;
+  }
+  .scene-bullets li { margin-bottom: 2px; }
+  .dialogue {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+    padding: 6px 10px;
+    margin-top: 6px;
+    font-style: italic;
+    font-size: 11.5px;
+    color: #1e40af;
+    border-radius: 0 4px 4px 0;
+  }
+  
+  .qa-card {
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    page-break-inside: avoid;
+  }
+  .qa-q { font-weight: 700; font-size: 12px; color: #0f172a; margin-bottom: 3px; }
+  .qa-a { font-size: 11.5px; color: #4b5563; }
+  
+  .page-break { page-break-before: always; }
+  
+  .footer {
+    margin-top: 24px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 10px;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+  <!-- PAGE 1: Header + Quick Info + Credentials Table -->
+  <div class="header">
+    <div>
+      <h1>Gb Elaaj — Video Walkthrough & Presentation Guide</h1>
+      <div class="tagline">Connected Healthcare Ecosystem — Complete Demo Script for Client Presentation</div>
+    </div>
+    <div class="badge">Confidential / Cheat Sheet</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>⚡ Quick Setup & Links</h3>
+      <div class="info-row">
+        <span class="info-label">Live Local URL:</span>
+        <span class="info-val">http://localhost:3000</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Login Page URL:</span>
+        <span class="info-val">http://localhost:3000/login</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Design Canvas:</span>
+        <span class="info-val">Gb Elaaj.html (Open in browser)</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">All Accounts Password:</span>
+        <span class="info-val" style="color: #e11d48;">DemoPassword123!</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>🎥 Screen Recording Shortcut (Windows)</h3>
+      <div class="info-row">
+        <span class="info-label">Instant Record:</span>
+        <span class="info-val">Win + Alt + R</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Save Location:</span>
+        <span class="info-val">Videos / Captures</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Alternative:</span>
+        <span class="info-val">Snipping Tool (Video Mode)</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Target Duration:</span>
+        <span class="info-val">2 to 3 Minutes Max</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">🔑 Complete Ready-Made Test Accounts (All Password: DemoPassword123!)</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>User Name</th>
+        <th>Login Email</th>
+        <th>What to Show Client</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="role-pill pill-pat">Patient</span></td>
+        <td>Sana Yousaf</td>
+        <td><strong>patient@gbelaaj.pk</strong></td>
+        <td>Appointments, Medical records, Lab reports, Pharmacy orders</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-doc">Doctor</span></td>
+        <td>Dr. Ayesha Khan</td>
+        <td><strong>doctor@gbelaaj.pk</strong></td>
+        <td>Upcoming consults, schedule slots, patient history, earnings</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-admin">Super Admin</span></td>
+        <td>Hassan Iqbal</td>
+        <td><strong>admin@gbelaaj.pk</strong></td>
+        <td>Doctor PMDC verification, system users, audit logs</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-pharm">Pharmacy</span></td>
+        <td>Wahab Hussain</td>
+        <td><strong>pharmacy@gbelaaj.pk</strong></td>
+        <td>Medicine inventory, stock counts, incoming orders</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-lab">Lab Admin</span></td>
+        <td>Chughtai Lab</td>
+        <td><strong>lab@gbelaaj.pk</strong></td>
+        <td>Diagnostic test catalog, sample bookings, report uploads</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-nurse">Nurse</span></td>
+        <td>Nurse Rabia</td>
+        <td><strong>nurse@gbelaaj.pk</strong></td>
+        <td>Home care visits, patient assignments, live GPS tracking</td>
+      </tr>
+      <tr>
+        <td><span class="role-pill pill-fin">Finance</span></td>
+        <td>Maira Khan</td>
+        <td><strong>finance@gbelaaj.pk</strong></td>
+        <td>15% platform commissions, transaction history, payouts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PAGE BREAK FOR CLEAN PRINTING -->
+  <div class="page-break"></div>
+
+  <!-- PAGE 2: Step-by-Step Recording Script -->
+  <div class="section-title">🎬 3-Minute Video Recording Script (Step-by-Step Flow)</div>
+
+  <div class="scene-card">
+    <div class="scene-header">
+      <div class="scene-name">Scene 1: Public Home & Doctor Discovery</div>
+      <div class="scene-time">0:00 - 0:40 (40s)</div>
+    </div>
+    <div class="scene-body">
+      <strong>Action:</strong> Open <code>http://localhost:3000</code> in your browser.
+      <ul class="scene-bullets">
+        <li>Scroll slowly through the <strong>Hero Section</strong> showing live stats (50+ Verified Doctors, 1,200+ Appointments).</li>
+        <li>Show <strong>Specialty Grid</strong> (Cardiology, Gynecology, Pediatrics) & <strong>Services</strong> (Telemedicine, Labs, Pharmacy, Home Nursing).</li>
+        <li>Click <strong>"Doctors"</strong> in top navbar: Demonstrate filters by specialty & city (e.g. Gilgit, Islamabad).</li>
+        <li>Click on <strong>Dr. Ayesha Khan</strong> to show verified PMDC badge, qualifications, fee, and available video consultation modes.</li>
+      </ul>
+      <div class="dialogue">💬 <strong>What to say (or text overlay):</strong> "Yeh platform ka public interface hai jahan patient verified doctors search kar sakta hai, specialties dekh sakta hai aur direct appointment book kar sakta hai."</div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-header">
+      <div class="scene-name">Scene 2: Patient Portal Experience</div>
+      <div class="scene-time">0:40 - 1:25 (45s)</div>
+    </div>
+    <div class="scene-body">
+      <strong>Action:</strong> Go to <code>http://localhost:3000/login</code> ➔ Enter <code>patient@gbelaaj.pk</code> | <code>DemoPassword123!</code>
+      <ul class="scene-bullets">
+        <li>Show the <strong>Patient Dashboard</strong>: Upcoming video appointment with Dr. Ayesha Khan.</li>
+        <li>Click <strong>"Medical Records"</strong>: Show existing prescriptions and consultation summaries stored securely.</li>
+        <li>Click <strong>"Lab Reports"</strong>: Show Complete Blood Count (CBC) digital report with status.</li>
+        <li>Click <strong>"Pharmacy"</strong>: Show medicine order history with delivery status ("Out for delivery").</li>
+        <li>Log out from top right profile icon.</li>
+      </ul>
+      <div class="dialogue">💬 <strong>What to say:</strong> "Patient login karke apni appointments, medical history, lab reports aur pharmacy orders ek hi dashboard se manage kar sakta hai."</div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-header">
+      <div class="scene-name">Scene 3: Doctor Portal & Schedule Management</div>
+      <div class="scene-time">1:25 - 2:10 (45s)</div>
+    </div>
+    <div class="scene-body">
+      <strong>Action:</strong> Go to <code>/login</code> ➔ Enter <code>doctor@gbelaaj.pk</code> | <code>DemoPassword123!</code>
+      <ul class="scene-bullets">
+        <li>Show <strong>Doctor Dashboard</strong>: Today's schedule, pending consultations, and active patient queue.</li>
+        <li>Show <strong>Time Slots / Schedule</strong>: Demonstrating how doctor configures custom video & clinic availability.</li>
+        <li>Show <strong>Earnings / Wallet</strong>: Automated calculation of consultation revenue and platform fee deductions.</li>
+        <li>Log out.</li>
+      </ul>
+      <div class="dialogue">💬 <strong>What to say:</strong> "Doctor portal me doctors apni availability slots set karte hain, video consultations conduct karte hain aur apni earnings aur payouts monitor karte hain."</div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-header">
+      <div class="scene-name">Scene 4: Super Admin Control & Doctor Verification</div>
+      <div class="scene-time">2:10 - 2:45 (35s)</div>
+    </div>
+    <div class="scene-body">
+      <strong>Action:</strong> Go to <code>/login</code> ➔ Enter <code>admin@gbelaaj.pk</code> | <code>DemoPassword123!</code>
+      <ul class="scene-bullets">
+        <li>Click <strong>"Doctor Verification"</strong>: Show the PMDC approval queue with "Approve" / "Reject" controls.</li>
+        <li>Explain that no doctor can appear publicly without Super Admin's license verification.</li>
+        <li>Show <strong>Audit Log & User Management</strong>: Total system oversight.</li>
+        <li>Log out.</li>
+      </ul>
+      <div class="dialogue">💬 <strong>What to say:</strong> "Super Admin ke paas mukammal control hai. Koi bhi doctor tab tak live nahi hota jab tak Admin unka PMDC medical license verify karke approve na kare."</div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-header">
+      <div class="scene-name">Scene 5: Bonus UI/UX Design Canvas Showcase</div>
+      <div class="scene-time">2:45 - 3:05 (20s)</div>
+    </div>
+    <div class="scene-body">
+      <strong>Action:</strong> Open <code>Gb Elaaj.html</code> in a new browser tab.
+      <ul class="scene-bullets">
+        <li>Show the full interactive design canvas showing all artboards (Desktop, Tablet, Mobile responsive screens).</li>
+        <li>Highlights design tokens, typography, and clean design system.</li>
+      </ul>
+      <div class="dialogue">💬 <strong>What to say:</strong> "Iske sath complete interactive design system aur mobile/desktop responsive design boards bhi fully implemented hain."</div>
+    </div>
+  </div>
+
+  <!-- PAGE BREAK FOR CLEAN PRINTING -->
+  <div class="page-break"></div>
+
+  <!-- PAGE 3: Client FAQ & Speaking Points -->
+  <div class="section-title">💬 Anticipated Client Questions & Strongest Answers</div>
+
+  <div class="qa-card">
+    <div class="qa-q">Q1: "Is the system 100% working and ready?"</div>
+    <div class="qa-a"><strong>Answer:</strong> "Yes, the complete core engine (Next.js 15, PostgreSQL database, Prisma ORM, Auth.js) is 100% functional. All 7 role portals (Patient, Doctor, Admin, Pharmacy, Lab, Nurse, Finance) are fully built and running. For full public launch, we simply plug in the production credentials (Agora for live video, Mapbox for maps, and payment gateway)."</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">Q2: "How will doctors and patients get onto the platform when launched?"</div>
+    <div class="qa-a"><strong>Answer:</strong> "Patients can self-register in 30 seconds via phone/email. Doctors register via 'Join as Doctor' with their PMDC license number and degrees. Every doctor remains in 'Pending' status until Super Admin manually verifies their license and approves them."</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">Q3: "How does the system ensure safety for Home Nursing and Labs?"</div>
+    <div class="qa-a"><strong>Answer:</strong> "Every nurse profile requires Pakistan Nursing Council (PNC) registration and police character clearance. Additionally, real-time GPS tracking (Mapbox) records the exact arrival and departure times of nurses and sample-collection riders."</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">Q4: "Can a patient in Gilgit consult an Islamabad doctor, but get medicine locally?"</div>
+    <div class="qa-a"><strong>Answer:</strong> "Absolutely! Doctor consultations are digital/video (location independent), while Pharmacies and Labs are strictly hyper-local (city-filtered). Patients receive an instant PDF E-Prescription which they can either purchase from their neighborhood pharmacy or order via local city delivery."</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">Q5: "How does the platform make money?"</div>
+    <div class="qa-a"><strong>Answer:</strong> "The platform has an automated commission split engine built in (15% on consultations, 8% on pharmacy, 12% on lab tests). Every transaction automatically splits between the provider's wallet and the platform's revenue."</div>
+  </div>
+
+  <div class="footer">
+    <span>Gb Elaaj — Healthcare Platform Documentation</span>
+    <span>Generated for Internal Presentation & Video Recording</span>
+  </div>
+
+</body>
+</html>
