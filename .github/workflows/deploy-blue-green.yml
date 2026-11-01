@@ -16,8 +16,6 @@
 name: Blue-green deploy to Vercel
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       promote:
