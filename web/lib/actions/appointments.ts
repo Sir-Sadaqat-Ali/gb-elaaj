@@ -34,9 +34,6 @@ export async function bookAppointmentAction(input: BookAppointmentInput): Promis
     include: { user: { select: { emailVerified: true } } },
   });
   if (!patient) return { ok: false, error: "Patient profile not found." };
-  if (!patient.user.emailVerified) {
-    return { ok: false, error: "Please verify your email before booking. Use the banner at the top to resend the link." };
-  }
 
   const doctor = await prisma.doctorProfile.findUnique({
     where: { slug: parsed.data.doctorSlug },

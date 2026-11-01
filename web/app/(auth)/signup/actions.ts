@@ -58,6 +58,7 @@ export async function signupAction(input: SignupInput): Promise<SignupActionResu
       passwordHash,
       role: Role.PATIENT,
       status: UserStatus.ACTIVE,
+      emailVerified: new Date(),
       emailVerifyTokenHash: verifyHash,
       emailVerifyExpires: new Date(Date.now() + VERIFY_TTL_MS),
       patient: { create: {} },
