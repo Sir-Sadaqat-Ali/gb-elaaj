@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/data/confirm-button";
 import { blockSlotAction } from "@/lib/actions/schedule";
 import { ensureDoctorDaySlots } from "@/lib/slots";
-import { formatDate, formatTime } from "@/lib/formatting";
+import { formatDate, formatTime, formatPktDateIso } from "@/lib/formatting";
 import { Video, Building, Lock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -28,30 +28,22 @@ export default async function DoctorSchedulePage({
 
   const { date: rawDate } = await searchParams;
 
-  // Selected date or real-time today by default
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  let activeDate = today;
-  if (rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-    const parsed = new Date(`${rawDate}T00:00:00`);
-    if (!Number.isNaN(parsed.getTime())) {
-      activeDate = parsed;
-    }
-  }
+  // Selected date or real-time today in Pakistan Time
+  const todayIso = formatPktDateIso(new Date());
+  const activeDateIso = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayIso;
+  const [y, m, d] = activeDateIso.split("-").map(Number);
+  const activeDate = new Date(Date.UTC(y, m - 1, d, 5, 0, 0, 0)); // 10 AM PKT
 
   // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
-  const slots = await ensureDoctorDaySlots(me.doctor.id, activeDate);
+  const slots = await ensureDoctorDaySlots(me.doctor.id, activeDateIso);
 
-  const prevDay = new Date(activeDate);
-  prevDay.setDate(prevDay.getDate() - 1);
-  const prevDateStr = prevDay.toISOString().slice(0, 10);
+  const prevDate = new Date(Date.UTC(y, m - 1, d - 1, 5, 0, 0, 0));
+  const prevDateStr = formatPktDateIso(prevDate);
 
-  const nextDay = new Date(activeDate);
-  nextDay.setDate(nextDay.getDate() + 1);
-  const nextDateStr = nextDay.toISOString().slice(0, 10);
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1, 5, 0, 0, 0));
+  const nextDateStr = formatPktDateIso(nextDate);
 
-  const isToday = activeDate.toDateString() === today.toDateString();
+  const isToday = activeDateIso === todayIso;
   const dateHeading = isToday ? `Today · ${formatDate(activeDate)}` : formatDate(activeDate);
 
   const totalOpen = slots.filter((s) => s.status === "OPEN").length;

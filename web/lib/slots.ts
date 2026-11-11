@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import { ConsultMode, SlotStatus } from "@prisma/client";
+import { formatPktDateIso } from "@/lib/formatting";
 
 /**
  * Standard fixed daily operating hours:
- * 10:00 AM to 5:00 PM in exact 20-minute intervals.
+ * 10:00 AM to 5:00 PM in exact 20-minute intervals (21 slots total).
  */
 export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
   { hour: 10, minute: 0 },
@@ -30,27 +31,70 @@ export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
 ];
 
 /**
- * Ensures a doctor has standard 10:00 AM – 5:00 PM (20-min) slots for a SINGLE day.
- * Does not overwrite existing blocked/booked slots.
+ * Helper: get hour (0-23) in Pakistan Standard Time (UTC+5, no DST).
  */
-export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date = new Date()) {
-  const day = new Date(targetDate);
-  day.setHours(0, 0, 0, 0);
+export function getPktHour(date: Date): number {
+  return (date.getUTCHours() + 5) % 24;
+}
 
-  const nextDay = new Date(day);
-  nextDay.setDate(day.getDate() + 1);
+/**
+ * Helper: get minute (0-59).
+ */
+export function getPktMinute(date: Date): number {
+  return date.getUTCMinutes();
+}
+
+/**
+ * Check if a slot timestamp is in the past compared to current time.
+ */
+export function isSlotPast(startsAt: Date | string): boolean {
+  const d = typeof startsAt === "string" ? new Date(startsAt) : startsAt;
+  return d.getTime() < Date.now();
+}
+
+/**
+ * Ensures a doctor has all 21 slots (10:00 AM – 5:00 PM PKT) for a SINGLE day.
+ * Always returns ALL 21 slots.
+ * Does NOT overwrite existing BOOKED or BLOCKED slots.
+ * Cleans up any legacy open slots outside 10:00 AM – 5:00 PM.
+ */
+export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | string = new Date()) {
+  const dateIso = formatPktDateIso(targetDate);
+  const [year, month, day] = dateIso.split("-").map(Number);
+
+  // PKT day range in UTC:
+  // 00:00:00 PKT = 19:00:00 UTC previous day (-5 hours)
+  // 23:59:59.999 PKT = 18:59:59.999 UTC current day
+  const pktDayStartUtc = new Date(Date.UTC(year, month - 1, day, -5, 0, 0, 0));
+  const pktDayEndUtc = new Date(Date.UTC(year, month - 1, day, 18, 59, 59, 999));
 
   const existing = await prisma.doctorAvailability.findMany({
     where: {
       doctorId,
-      startsAt: { gte: day, lt: nextDay },
+      startsAt: { gte: pktDayStartUtc, lte: pktDayEndUtc },
     },
     orderBy: { startsAt: "asc" },
   });
 
-  if (existing.length >= 21) {
-    return existing;
+  // Clean up any historical open slots outside 10:00 AM – 5:00 PM PKT
+  const invalidSlotIds = existing
+    .filter((s) => {
+      const h = getPktHour(new Date(s.startsAt));
+      return s.status === SlotStatus.OPEN && (h < 10 || h >= 17);
+    })
+    .map((s) => s.id);
+
+  if (invalidSlotIds.length > 0) {
+    try {
+      await prisma.doctorAvailability.deleteMany({
+        where: { id: { in: invalidSlotIds } },
+      });
+    } catch (e) {
+      console.error("[slots] Error cleaning invalid slots:", e);
+    }
   }
+
+  const validExisting = existing.filter((s) => !invalidSlotIds.includes(s.id));
 
   const slotsToCreate: {
     doctorId: string;
@@ -61,24 +105,37 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date = 
   }[] = [];
 
   for (const { hour, minute } of DAILY_SLOT_TIMES) {
-    const startsAt = new Date(day);
-    startsAt.setHours(hour, minute, 0, 0);
+    // hour in PKT (10..16) -> UTC hour = hour - 5
+    const startsAt = new Date(Date.UTC(year, month - 1, day, hour - 5, minute, 0, 0));
     const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
 
-    slotsToCreate.push({
-      doctorId,
-      startsAt,
-      endsAt,
-      mode: ConsultMode.VIDEO,
-      status: SlotStatus.OPEN,
-    });
-    slotsToCreate.push({
-      doctorId,
-      startsAt,
-      endsAt,
-      mode: ConsultMode.CLINIC,
-      status: SlotStatus.OPEN,
-    });
+    // Check if VIDEO slot exists
+    const hasVideo = validExisting.some(
+      (e) => e.mode === ConsultMode.VIDEO && e.startsAt.getTime() === startsAt.getTime(),
+    );
+    if (!hasVideo) {
+      slotsToCreate.push({
+        doctorId,
+        startsAt,
+        endsAt,
+        mode: ConsultMode.VIDEO,
+        status: SlotStatus.OPEN,
+      });
+    }
+
+    // Check if CLINIC slot exists
+    const hasClinic = validExisting.some(
+      (e) => e.mode === ConsultMode.CLINIC && e.startsAt.getTime() === startsAt.getTime(),
+    );
+    if (!hasClinic) {
+      slotsToCreate.push({
+        doctorId,
+        startsAt,
+        endsAt,
+        mode: ConsultMode.CLINIC,
+        status: SlotStatus.OPEN,
+      });
+    }
   }
 
   if (slotsToCreate.length > 0) {
@@ -88,34 +145,51 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date = 
         skipDuplicates: true,
       });
     } catch (e) {
-      console.error("[slots] Day slot generation error:", e);
+      console.error("[slots] Error creating standard day slots:", e);
     }
   }
 
-  return prisma.doctorAvailability.findMany({
+  // Fetch all slots for this day strictly within 10:00 AM to 5:00 PM PKT
+  const allDaySlots = await prisma.doctorAvailability.findMany({
     where: {
       doctorId,
-      startsAt: { gte: day, lt: nextDay },
+      startsAt: { gte: pktDayStartUtc, lte: pktDayEndUtc },
     },
     orderBy: { startsAt: "asc" },
+  });
+
+  return allDaySlots.filter((s) => {
+    const h = getPktHour(new Date(s.startsAt));
+    return h >= 10 && h < 17;
   });
 }
 
 /**
- * For patient booking: ensures upcoming 7 days have bookable open slots.
+ * For patient booking: ensures today and tomorrow have all 21 slots generated.
  */
-export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
+export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 2) {
   const now = new Date();
+  const dateIso = formatPktDateIso(now);
+  const [year, month, day] = dateIso.split("-").map(Number);
 
   for (let d = 0; d < daysAhead; d++) {
-    const day = new Date(now);
-    day.setDate(now.getDate() + d);
-    await ensureDoctorDaySlots(doctorId, day);
+    const target = new Date(Date.UTC(year, month - 1, day + d, 5, 0, 0, 0)); // 10 AM PKT
+    await ensureDoctorDaySlots(doctorId, target);
   }
 
-  return prisma.doctorAvailability.findMany({
-    where: { doctorId, startsAt: { gte: now }, status: SlotStatus.OPEN },
+  const pktDayStartUtc = new Date(Date.UTC(year, month - 1, day, -5, 0, 0, 0));
+  const pktFutureEndUtc = new Date(Date.UTC(year, month - 1, day + daysAhead, 18, 59, 59, 999));
+
+  const slots = await prisma.doctorAvailability.findMany({
+    where: {
+      doctorId,
+      startsAt: { gte: pktDayStartUtc, lte: pktFutureEndUtc },
+    },
     orderBy: { startsAt: "asc" },
-    take: 48,
+  });
+
+  return slots.filter((s) => {
+    const h = getPktHour(new Date(s.startsAt));
+    return h >= 10 && h < 17;
   });
 }

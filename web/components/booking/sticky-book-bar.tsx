@@ -12,7 +12,7 @@ export function StickyBookBar({ slug, feePaisa, name }: { slug: string; feePaisa
           <div className="ge-mono text-[15px] font-semibold text-ge-navy">{formatPkr(feePaisa)}</div>
         </div>
         <Button asChild size="lg">
-          <Link href={`/doctor/${slug}/book`}>Book appointment</Link>
+          <Link href="#slots">Select time</Link>
         </Button>
       </div>
     </div>

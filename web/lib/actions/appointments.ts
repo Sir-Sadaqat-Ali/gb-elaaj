@@ -52,9 +52,9 @@ export async function bookAppointmentAction(input: BookAppointmentInput): Promis
       if (slot.status !== SlotStatus.OPEN) throw new Error("SLOT_TAKEN");
       if (slot.startsAt.getTime() < Date.now()) throw new Error("SLOT_PAST");
 
-      // Lock the slot
-      await tx.doctorAvailability.update({
-        where: { id: slot.id },
+      // Lock the booked slot and any concurrent mode slot for this doctor
+      await tx.doctorAvailability.updateMany({
+        where: { doctorId: doctor.id, startsAt: slot.startsAt },
         data: { status: SlotStatus.BOOKED },
       });
 

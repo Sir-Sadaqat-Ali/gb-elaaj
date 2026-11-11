@@ -71,6 +71,7 @@ export default async function BookDoctorPage({
               id: s.id,
               startsAt: s.startsAt.toISOString(),
               mode: s.mode,
+              status: s.status,
             }))}
             preSelectSlotId={preSelectSlot ?? null}
           />

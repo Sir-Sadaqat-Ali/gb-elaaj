@@ -11,8 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { IconTile } from "@/components/marketing/bits";
 import { StickyBookBar } from "@/components/booking/sticky-book-bar";
-import { formatPkr, formatTime, formatDate, maskLicense } from "@/lib/formatting";
-import { ensureDoctorUpcomingSlots } from "@/lib/slots";
+import { formatPkr, formatTime, formatDate, maskLicense, formatPktDateIso } from "@/lib/formatting";
+import { ensureDoctorDaySlots, DAILY_SLOT_TIMES, getPktHour } from "@/lib/slots";
 
 export const revalidate = 60;
 
@@ -32,8 +32,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function DoctorProfilePage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function DoctorProfilePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ date?: string }>;
+}) {
   const { slug } = await params;
+  const { date: rawDate } = await searchParams;
 
   const doctor = await prisma.doctorProfile.findUnique({
     where: { slug },
@@ -41,11 +48,6 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
       user: true,
       city: true,
       specialties: { include: { specialty: true } },
-      availability: {
-        where: { startsAt: { gte: new Date() }, status: "OPEN" },
-        orderBy: { startsAt: "asc" },
-        take: 18,
-      },
       reviews: {
         include: { author: true },
         orderBy: { createdAt: "desc" },
@@ -56,10 +58,45 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
 
   if (!doctor || doctor.verifiedStatus !== "APPROVED") notFound();
 
-  const availability =
-    doctor.availability.length >= 6
-      ? doctor.availability
-      : await ensureDoctorUpcomingSlots(doctor.id);
+  // Selected date or real-time today in Pakistan Time
+  const todayIso = formatPktDateIso(new Date());
+  const now = new Date();
+  const [ty, tm, td] = todayIso.split("-").map(Number);
+  const tomorrowDate = new Date(Date.UTC(ty, tm - 1, td + 1, 5, 0, 0, 0));
+  const tomorrowIso = formatPktDateIso(tomorrowDate);
+
+  // If after 5 PM PKT, today's operating hours have ended; default to tomorrow
+  const isPastTodayOperatingHours = getPktHour(now) >= 17;
+  const defaultDateIso = isPastTodayOperatingHours ? tomorrowIso : todayIso;
+  const activeDateIso = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : defaultDateIso;
+
+  const [ay, am, ad] = activeDateIso.split("-").map(Number);
+  const activeDate = new Date(Date.UTC(ay, am - 1, ad, 5, 0, 0, 0));
+
+  // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
+  const daySlots = await ensureDoctorDaySlots(doctor.id, activeDateIso);
+
+  // Aggregate standard 21 slots for the active day without duplicates
+  const slotPills = DAILY_SLOT_TIMES.map(({ hour, minute }) => {
+    const startsAt = new Date(Date.UTC(ay, am - 1, ad, hour - 5, minute, 0, 0));
+    const matching = daySlots.filter((s) => s.startsAt.getTime() === startsAt.getTime());
+    const isPast = startsAt.getTime() < Date.now();
+    const isBooked = matching.some((s) => s.status === "BOOKED");
+    const isBlocked = !isBooked && matching.length > 0 && matching.every((s) => s.status === "BLOCKED");
+    const isOpen = !isPast && !isBooked && !isBlocked;
+
+    const openSlot = matching.find((s) => s.status === "OPEN") ?? matching[0];
+
+    return {
+      startsAt,
+      timeLabel: formatTime(startsAt),
+      isPast,
+      isBooked,
+      isBlocked,
+      isOpen,
+      slotId: openSlot?.id ?? null,
+    };
+  });
 
   // Saved-state for a signed-in patient viewing this profile.
   const session = await auth();
@@ -100,22 +137,6 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
       reviewCount: doctor.ratingCount,
     } : undefined,
   };
-
-  // group slots by day label, strictly 10am-5pm, and deduplicate times
-  const slotsByDay: Record<string, typeof availability> = {};
-  for (const slot of availability) {
-    const d = new Date(slot.startsAt);
-    const h = d.getHours();
-    if (h < 10 || h >= 17) continue; // strictly 10:00 AM – 5:00 PM
-
-    const key = formatDate(slot.startsAt);
-    const list = (slotsByDay[key] ??= []);
-    // Deduplicate so exact same time never appears twice side-by-side
-    if (!list.some((existing) => new Date(existing.startsAt).getTime() === d.getTime())) {
-      list.push(slot);
-    }
-  }
-  const dayKeys = Object.keys(slotsByDay).slice(0, 5);
 
   const ratingHist = [5, 4, 3, 2, 1].map((star) => {
     const count = doctor.reviews.filter((r) => r.rating === star).length || (star === 5 ? Math.round(doctor.ratingCount * 0.88) : star === 4 ? Math.round(doctor.ratingCount * 0.09) : 0);
@@ -180,39 +201,115 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          {/* Slots */}
-          <Card className="rounded-3xl p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold text-ge-ink">Available slots</h2>
-              <Badge variant="success">Live availability</Badge>
-            </div>
-            {dayKeys.length === 0 ? (
-              <p className="mt-4 text-sm text-ge-muted">No upcoming slots available. Please check back tomorrow.</p>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {dayKeys.map((day) => (
-                  <div key={day}>
-                    <div className="mb-2 text-[12px] font-semibold text-ge-navy">{day}</div>
-                    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
-                      {slotsByDay[day]!.map((s) => (
-                        <Link
-                          key={s.id}
-                          href={`/doctor/${slug}/book?slot=${s.id}`}
-                          className="rounded-full border border-ge-border bg-white px-3 py-2 text-center text-[12px] font-medium text-ge-ink transition hover:border-ge-primary hover:bg-ge-blue-tint hover:text-ge-primary"
-                        >
-                          {formatTime(s.startsAt)}
-                          {s.mode === "VIDEO" ? (
-                            <span className="ml-1 inline-flex"><Video className="h-3 w-3" aria-hidden /></span>
-                          ) : (
-                            <span className="ml-1 inline-flex"><Building className="h-3 w-3" aria-hidden /></span>
-                          )}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          {/* Available Slots Section (Strictly 1 day view, all 21 slots) */}
+          <Card id="slots" className="rounded-3xl p-6 scroll-mt-24">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ge-border pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[16px] font-bold text-ge-ink">
+                    {activeDateIso === todayIso ? `Today · ${formatDate(activeDate)}` : `Tomorrow · ${formatDate(activeDate)}`}
+                  </h2>
+                  <Badge variant="success">Live availability</Badge>
+                </div>
+                <p className="mt-1 text-[12px] text-ge-muted">
+                  Standard 10:00 AM – 5:00 PM (20-min slots). Tap a slot to book instantly.
+                </p>
               </div>
-            )}
+
+              <div className="flex items-center gap-1.5 rounded-2xl bg-ge-soft-bg p-1 border border-ge-border">
+                <Link
+                  href={`/doctor/${slug}?date=${todayIso}#slots`}
+                  className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${
+                    activeDateIso === todayIso
+                      ? "bg-white text-ge-primary shadow-xs"
+                      : "text-ge-muted hover:text-ge-ink"
+                  }`}
+                >
+                  Today
+                </Link>
+                <Link
+                  href={`/doctor/${slug}?date=${tomorrowIso}#slots`}
+                  className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${
+                    activeDateIso === tomorrowIso
+                      ? "bg-white text-ge-primary shadow-xs"
+                      : "text-ge-muted hover:text-ge-ink"
+                  }`}
+                >
+                  Tomorrow
+                </Link>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7">
+              {slotPills.map((s) => {
+                if (s.isOpen && s.slotId) {
+                  return (
+                    <Link
+                      key={s.timeLabel}
+                      href={`/doctor/${slug}/book?slot=${s.slotId}`}
+                      className="group flex flex-col items-center justify-center rounded-2xl border border-ge-primary/30 bg-ge-blue-tint/40 p-2.5 text-center transition hover:border-ge-primary hover:bg-ge-primary hover:text-white"
+                    >
+                      <span className="text-[12.5px] font-semibold text-ge-ink group-hover:text-white">
+                        {s.timeLabel}
+                      </span>
+                      <span className="mt-0.5 text-[10px] font-medium text-ge-primary group-hover:text-white/90">
+                        Available
+                      </span>
+                    </Link>
+                  );
+                }
+
+                if (s.isBooked) {
+                  return (
+                    <div
+                      key={s.timeLabel}
+                      title="This slot is already booked by another patient"
+                      className="flex flex-col items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 p-2.5 text-center cursor-not-allowed opacity-80"
+                    >
+                      <span className="text-[12px] font-medium text-rose-700/80 line-through">
+                        {s.timeLabel}
+                      </span>
+                      <span className="mt-0.5 text-[10px] font-bold text-rose-600">
+                        Booked
+                      </span>
+                    </div>
+                  );
+                }
+
+                if (s.isBlocked) {
+                  return (
+                    <div
+                      key={s.timeLabel}
+                      title="Doctor is unavailable at this time"
+                      className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100/80 p-2.5 text-center cursor-not-allowed opacity-75"
+                    >
+                      <span className="text-[12px] font-medium text-neutral-500">
+                        {s.timeLabel}
+                      </span>
+                      <span className="mt-0.5 text-[10px] text-neutral-400">
+                        Unavailable
+                      </span>
+                    </div>
+                  );
+                }
+
+                // Past slot
+                return (
+                  <div
+                    key={s.timeLabel}
+                    title="This time has passed"
+                    className="flex flex-col items-center justify-center rounded-2xl border border-neutral-100 bg-neutral-50/60 p-2.5 text-center cursor-not-allowed opacity-40"
+                  >
+                    <span className="text-[12px] font-medium text-neutral-400">
+                      {s.timeLabel}
+                    </span>
+                    <span className="mt-0.5 text-[10px] text-neutral-400">
+                      Passed
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
 
           {/* About */}

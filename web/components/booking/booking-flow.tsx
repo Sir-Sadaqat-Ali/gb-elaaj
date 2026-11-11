@@ -11,7 +11,7 @@ import { bookAppointmentAction } from "@/lib/actions/appointments";
 import { BankTransferDetails } from "@/components/booking/bank-transfer-details";
 import { formatPkr, formatDate, formatTime } from "@/lib/formatting";
 
-type Slot = { id: string; startsAt: string; mode: "VIDEO" | "CLINIC" };
+type Slot = { id: string; startsAt: string; mode: "VIDEO" | "CLINIC"; status?: string };
 
 const STEPS = ["Type", "Schedule", "Symptoms", "Confirm"] as const;
 
@@ -32,7 +32,7 @@ export function BookingFlow({
 }) {
   const initialSlot = preSelectSlotId
     ? availability.find((s) => s.id === preSelectSlotId) ?? null
-    : availability[0] ?? null;
+    : null;
 
   const [step, setStep] = React.useState(Boolean(preSelectSlotId && initialSlot) ? 2 : 0);
   const [mode, setMode] = React.useState<"VIDEO" | "CLINIC">(initialSlot?.mode ?? "VIDEO");
@@ -42,16 +42,19 @@ export function BookingFlow({
   const [pending, start] = React.useTransition();
 
   const fee = mode === "VIDEO" ? videoFeePaisa : clinicFeePaisa || videoFeePaisa;
-  const slotsForMode = availability.filter((s) => {
-    if (s.mode !== mode) return false;
-    const h = new Date(s.startsAt).getHours();
-    return h >= 10 && h < 17; // standard 10:00 AM – 5:00 PM operating hours only
-  });
+  const slotsForMode = availability.filter((s) => s.mode === mode);
   const grouped = React.useMemo(() => groupByDay(slotsForMode), [slotsForMode]);
   const selectedSlot = availability.find((s) => s.id === slotId) ?? null;
 
+  const openVideoCount = availability.filter(
+    (s) => s.mode === "VIDEO" && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now(),
+  ).length;
+  const openClinicCount = availability.filter(
+    (s) => s.mode === "CLINIC" && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now(),
+  ).length;
+
   function next() {
-    if (step === 0 && slotsForMode.length === 0) {
+    if (step === 0 && (mode === "VIDEO" ? openVideoCount === 0 : openClinicCount === 0)) {
       toast.error(`No ${mode === "VIDEO" ? "video" : "clinic"} slots available. Try the other mode.`);
       return;
     }
@@ -63,6 +66,11 @@ export function BookingFlow({
   }
   function back() {
     setStep((s) => Math.max(0, s - 1));
+  }
+
+  function handleSelectSlotAndContinue(id: string) {
+    setSlotId(id);
+    setStep(2);
   }
 
   function submit() {
@@ -120,29 +128,24 @@ export function BookingFlow({
             mode={mode}
             setMode={(m) => {
               setMode(m);
-              const first = availability.find((s) => {
-                if (s.mode !== m) return false;
-                const h = new Date(s.startsAt).getHours();
-                return h >= 10 && h < 17;
-              });
+              const first = availability.find(
+                (s) => s.mode === m && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now(),
+              );
               setSlotId(first?.id ?? null);
             }}
             videoFeePaisa={videoFeePaisa}
             clinicFeePaisa={clinicFeePaisa}
-            videoCount={availability.filter((s) => {
-              if (s.mode !== "VIDEO") return false;
-              const h = new Date(s.startsAt).getHours();
-              return h >= 10 && h < 17;
-            }).length}
-            clinicCount={availability.filter((s) => {
-              if (s.mode !== "CLINIC") return false;
-              const h = new Date(s.startsAt).getHours();
-              return h >= 10 && h < 17;
-            }).length}
+            videoCount={openVideoCount}
+            clinicCount={openClinicCount}
           />
         )}
         {step === 1 && (
-          <ChooseSlot doctorName={doctorName} grouped={grouped} slotId={slotId} setSlotId={setSlotId} />
+          <ChooseSlot
+            doctorName={doctorName}
+            grouped={grouped}
+            slotId={slotId}
+            onSelectSlot={handleSelectSlotAndContinue}
+          />
         )}
         {step === 2 && (
           <div>
@@ -262,38 +265,105 @@ function ChooseMode({
 }
 
 function ChooseSlot({
-  doctorName, grouped, slotId, setSlotId,
+  doctorName,
+  grouped,
+  slotId,
+  onSelectSlot,
 }: {
   doctorName: string;
   grouped: { day: string; slots: Slot[] }[];
   slotId: string | null;
-  setSlotId: (id: string) => void;
+  onSelectSlot: (id: string) => void;
 }) {
   return (
     <div>
       <h2 className="ge-display text-[22px] font-semibold text-ge-navy">Pick a date and time</h2>
-      <p className="mt-1 text-[13px] text-ge-muted">Live availability for {doctorName} · updated just now.</p>
+      <p className="mt-1 text-[13px] text-ge-muted">Live availability for {doctorName} · standard 10:00 AM – 5:00 PM (20-min slots).</p>
       {grouped.length === 0 ? (
         <p className="mt-5 text-sm text-ge-muted">No upcoming slots. Please check back tomorrow.</p>
       ) : (
-        <div className="mt-5 space-y-5">
+        <div className="mt-5 space-y-6">
           {grouped.map((g) => (
-            <div key={g.day}>
-              <div className="mb-2 text-[12px] font-semibold text-ge-navy">{g.day}</div>
-              <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
-                {g.slots.map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    onClick={() => setSlotId(s.id)}
-                    aria-pressed={slotId === s.id}
-                    className={`rounded-full border px-2.5 py-2 text-[12px] font-medium ${
-                      slotId === s.id ? "border-ge-primary bg-ge-primary text-white" : "border-ge-border bg-white text-ge-ink hover:border-ge-primary"
-                    }`}
-                  >
-                    {formatTime(new Date(s.startsAt))}
-                  </button>
-                ))}
+            <div key={g.day} className="rounded-2xl border border-ge-border bg-ge-soft-bg/30 p-4">
+              <div className="mb-3 text-[13px] font-bold text-ge-navy">{g.day}</div>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7">
+                {g.slots.map((s) => {
+                  const isPast = new Date(s.startsAt).getTime() < Date.now();
+                  const isBooked = s.status === "BOOKED";
+                  const isBlocked = s.status === "BLOCKED";
+                  const isAvailable = !isPast && !isBooked && !isBlocked;
+                  const isSelected = slotId === s.id;
+
+                  if (isAvailable) {
+                    return (
+                      <button
+                        type="button"
+                        key={s.id}
+                        onClick={() => onSelectSlot(s.id)}
+                        aria-pressed={isSelected}
+                        className={`rounded-2xl border p-2 text-center text-[12px] font-semibold transition ${
+                          isSelected
+                            ? "border-ge-primary bg-ge-primary text-white shadow-xs"
+                            : "border-ge-border bg-white text-ge-ink hover:border-ge-primary hover:bg-ge-blue-tint/50"
+                        }`}
+                      >
+                        <div>{formatTime(new Date(s.startsAt))}</div>
+                        <div className={`mt-0.5 text-[10px] ${isSelected ? "text-white/90" : "text-ge-primary font-medium"}`}>
+                          Available
+                        </div>
+                      </button>
+                    );
+                  }
+
+                  if (isBooked) {
+                    return (
+                      <div
+                        key={s.id}
+                        className="rounded-2xl border border-rose-200 bg-rose-50/60 p-2 text-center cursor-not-allowed opacity-75"
+                        title="Booked by another patient"
+                      >
+                        <div className="text-[12px] font-medium text-rose-700/80 line-through">
+                          {formatTime(new Date(s.startsAt))}
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-bold text-rose-600">
+                          Booked
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (isBlocked) {
+                    return (
+                      <div
+                        key={s.id}
+                        className="rounded-2xl border border-neutral-200 bg-neutral-100 p-2 text-center cursor-not-allowed opacity-60"
+                        title="Unavailable"
+                      >
+                        <div className="text-[12px] font-medium text-neutral-500">
+                          {formatTime(new Date(s.startsAt))}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-neutral-400">
+                          Unavailable
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={s.id}
+                      className="rounded-2xl border border-neutral-100 bg-neutral-50/60 p-2 text-center cursor-not-allowed opacity-40"
+                      title="Passed"
+                    >
+                      <div className="text-[12px] font-medium text-neutral-400">
+                        {formatTime(new Date(s.startsAt))}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-neutral-400">
+                        Passed
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

@@ -25,18 +25,25 @@ export function formatPkrCompact(paisa: number): string {
   return formatPkr(paisa);
 }
 
+export const APP_TIMEZONE = "Asia/Karachi";
+
 export function formatDate(d: Date | string, opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }): string {
   const date = typeof d === "string" ? new Date(d) : d;
-  return new Intl.DateTimeFormat("en-PK", opts).format(date);
+  return new Intl.DateTimeFormat("en-PK", { timeZone: APP_TIMEZONE, ...opts }).format(date);
 }
 
 export function formatTime(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
-  return new Intl.DateTimeFormat("en-PK", { hour: "numeric", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat("en-PK", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 export function formatDateTime(d: Date | string): string {
   return `${formatDate(d)} · ${formatTime(d)}`;
+}
+
+export function formatPktDateIso(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 export function relativeTime(d: Date | string): string {
