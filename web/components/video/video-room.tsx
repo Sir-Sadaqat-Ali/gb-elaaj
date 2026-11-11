@@ -25,7 +25,7 @@ type Phase =
   | { kind: "error"; message: string }
   | { kind: "ready"; appId: string; channel: string; token: string; uid: string; remoteName: string }
   | { kind: "joining" }
-  | { kind: "in-call"; remoteJoined: boolean; remoteName: string };
+  | { kind: "in-call"; remoteJoined: boolean; remoteName: string; isMock?: boolean };
 
 export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }: Props) {
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" });
@@ -36,6 +36,7 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   const clientRef = React.useRef<IAgoraRTCClient | null>(null);
   const localAudioRef = React.useRef<IMicrophoneAudioTrack | null>(null);
   const localVideoTrackRef = React.useRef<ICameraVideoTrack | null>(null);
+  const mockStreamRef = React.useRef<MediaStream | null>(null);
   const agoraRef = React.useRef<AgoraRtc | null>(null);
 
   // ── Step 1: fetch token ─────────────────────────────────────
@@ -78,6 +79,56 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   const join = React.useCallback(async () => {
     if (phase.kind !== "ready") return;
     setPhase({ kind: "joining" });
+
+    const isMock =
+      !phase.appId ||
+      phase.appId === "mock-app-id" ||
+      phase.token.startsWith("mock_");
+
+    if (isMock) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        mockStreamRef.current = stream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.innerHTML = "";
+          const v = document.createElement("video");
+          v.srcObject = stream;
+          v.autoplay = true;
+          v.muted = true;
+          v.playsInline = true;
+          v.style.width = "100%";
+          v.style.height = "100%";
+          v.style.objectFit = "cover";
+          localVideoRef.current.appendChild(v);
+        }
+
+        setPhase({
+          kind: "in-call",
+          remoteJoined: false,
+          remoteName: phase.remoteName,
+          isMock: true,
+        });
+        return;
+      } catch (err) {
+        console.error("[video] media error:", err);
+        const msg = err instanceof Error ? err.message : "Couldn't connect.";
+        setPhase({
+          kind: "error",
+          message:
+            msg.includes("permission") ||
+            msg.includes("Permission") ||
+            msg.includes("NotAllowedError")
+              ? "Camera/microphone access was blocked. Please allow permissions in your browser settings."
+              : `Camera error: ${msg}`,
+        });
+        return;
+      }
+    }
+
     try {
       const Agora = (await import("agora-rtc-sdk-ng")).default;
       agoraRef.current = Agora;
@@ -115,6 +166,43 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
     } catch (err) {
       console.error("[video] join failed:", err);
       const msg = err instanceof Error ? err.message : "Couldn't connect.";
+
+      // Fallback to local media if Agora vendor key is invalid
+      if (
+        msg.includes("invalid vendor key") ||
+        msg.includes("can not find appid") ||
+        msg.includes("CAN_NOT_GET_GATEWAY_SERVER")
+      ) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          mockStreamRef.current = stream;
+          if (localVideoRef.current) {
+            localVideoRef.current.innerHTML = "";
+            const v = document.createElement("video");
+            v.srcObject = stream;
+            v.autoplay = true;
+            v.muted = true;
+            v.playsInline = true;
+            v.style.width = "100%";
+            v.style.height = "100%";
+            v.style.objectFit = "cover";
+            localVideoRef.current.appendChild(v);
+          }
+          setPhase({
+            kind: "in-call",
+            remoteJoined: false,
+            remoteName: phase.remoteName,
+            isMock: true,
+          });
+          return;
+        } catch {
+          // fall through
+        }
+      }
+
       setPhase({
         kind: "error",
         message: msg.includes("permission") || msg.includes("Permission")
@@ -127,6 +215,13 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   // ── Step 3: leave + cleanup ─────────────────────────────────
   const leave = React.useCallback(async () => {
     try {
+      if (mockStreamRef.current) {
+        mockStreamRef.current.getTracks().forEach((t) => t.stop());
+        mockStreamRef.current = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.innerHTML = "";
+      }
       if (localAudioRef.current) {
         localAudioRef.current.stop();
         localAudioRef.current.close();
@@ -158,6 +253,12 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
 
   // ── Toggle mic ──────────────────────────────────────────────
   function toggleMic() {
+    if (mockStreamRef.current) {
+      const next = !micOn;
+      mockStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = next));
+      setMicOn(next);
+      return;
+    }
     if (localAudioRef.current) {
       const next = !micOn;
       void localAudioRef.current.setEnabled(next);
@@ -165,6 +266,12 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
     }
   }
   function toggleCam() {
+    if (mockStreamRef.current) {
+      const next = !camOn;
+      mockStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = next));
+      setCamOn(next);
+      return;
+    }
     if (localVideoTrackRef.current) {
       const next = !camOn;
       void localVideoTrackRef.current.setEnabled(next);
@@ -203,7 +310,7 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
         {/* Live badge */}
         <span className="absolute left-3 top-3 rounded-full bg-black/40 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
           <span className="mr-1 text-[color:var(--ge-success)]">●</span>
-          {phase.kind === "in-call" ? (phase.remoteJoined ? "Live" : "Connected · waiting") : "Joining…"}
+          {phase.kind === "in-call" ? (phase.remoteJoined ? "Live" : phase.isMock ? "Demo consultation" : "Connected · waiting") : "Joining…"}
         </span>
 
         {/* Local video PiP */}
@@ -250,9 +357,15 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
         </div>
       </div>
 
+      {phase.kind === "in-call" && phase.isMock && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[12px] text-amber-900">
+          <strong>Demo Consultation:</strong> Connected with local camera & mic. To connect live video across two remote devices over the internet, add your free <strong>Agora App ID</strong> in Vercel settings.
+        </div>
+      )}
+
       <p className="text-[11.5px] text-ge-muted">
         Channel <code className="ge-mono">{phase.kind === "ready" || phase.kind === "in-call" ? "active" : "—"}</code> ·
-        End-to-end via Agora · Token expires at end of appointment window.
+        {phase.kind === "in-call" && phase.isMock ? " Local Media Stream" : " End-to-end via Agora"} · Token expires at end of appointment window.
       </p>
     </div>
   );
