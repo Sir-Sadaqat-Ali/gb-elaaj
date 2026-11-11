@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { IconTile } from "@/components/marketing/bits";
 import { StickyBookBar } from "@/components/booking/sticky-book-bar";
 import { formatPkr, formatTime, formatDate, maskLicense } from "@/lib/formatting";
+import { ensureDoctorUpcomingSlots } from "@/lib/slots";
 
 export const revalidate = 60;
 
@@ -55,6 +56,11 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
 
   if (!doctor || doctor.verifiedStatus !== "APPROVED") notFound();
 
+  const availability =
+    doctor.availability.length >= 6
+      ? doctor.availability
+      : await ensureDoctorUpcomingSlots(doctor.id);
+
   // Saved-state for a signed-in patient viewing this profile.
   const session = await auth();
   const isPatient = session?.user?.role === "PATIENT";
@@ -96,8 +102,8 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
   };
 
   // group slots by day label
-  const slotsByDay: Record<string, typeof doctor.availability> = {};
-  for (const slot of doctor.availability) {
+  const slotsByDay: Record<string, typeof availability> = {};
+  for (const slot of availability) {
     const key = formatDate(slot.startsAt);
     (slotsByDay[key] ??= []).push(slot);
   }

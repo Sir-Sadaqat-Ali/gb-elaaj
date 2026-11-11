@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/brand/verified-badge";
 import { BookingFlow } from "@/components/booking/booking-flow";
+import { ensureDoctorUpcomingSlots } from "@/lib/slots";
 import { formatPkr } from "@/lib/formatting";
 import { ChevronRight, Lock } from "lucide-react";
 
@@ -41,14 +42,11 @@ export default async function BookDoctorPage({
       user: true,
       city: true,
       specialties: { include: { specialty: true } },
-      availability: {
-        where: { startsAt: { gte: new Date() }, status: "OPEN" },
-        orderBy: { startsAt: "asc" },
-        take: 36,
-      },
     },
   });
   if (!doctor || doctor.verifiedStatus !== "APPROVED" || !doctor.active) notFound();
+
+  const availability = await ensureDoctorUpcomingSlots(doctor.id);
 
   return (
     <div className="bg-ge-soft-bg pb-16">
@@ -69,7 +67,7 @@ export default async function BookDoctorPage({
             doctorName={doctor.user.name}
             videoFeePaisa={doctor.consultFeePaisa}
             clinicFeePaisa={doctor.clinicFeePaisa}
-            availability={doctor.availability.map((s) => ({
+            availability={availability.map((s) => ({
               id: s.id,
               startsAt: s.startsAt.toISOString(),
               mode: s.mode,
@@ -78,20 +76,24 @@ export default async function BookDoctorPage({
           />
         </div>
 
-        <aside className="space-y-4 md:sticky md:top-20 md:self-start">
-          <Card className="rounded-3xl border-0 p-5 shadow-card">
+        <aside className="order-first space-y-4 md:order-last md:sticky md:top-20 md:self-start">
+          <Card className="rounded-3xl border border-ge-border bg-white p-5 shadow-card">
             <div className="flex items-center gap-3">
-              <Avatar src={doctor.user.image} name={doctor.user.name} size={48} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[14px] font-semibold text-ge-ink">{doctor.user.name}</span>
+              <Avatar src={doctor.user.image} name={doctor.user.name} size={52} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[15px] font-semibold text-ge-ink">{doctor.user.name}</span>
                   <VerifiedBadge size="sm" />
                 </div>
-                <div className="text-[12px] text-ge-primary">{doctor.specialties[0]?.specialty.nameEn}</div>
-                <div className="text-[11px] text-ge-muted">{doctor.city.nameEn}</div>
+                <div className="text-[12.5px] font-medium text-ge-primary">
+                  {doctor.specialties[0]?.specialty.nameEn ?? "Specialist"}
+                </div>
+                <div className="text-[11.5px] text-ge-muted">
+                  {doctor.city.nameEn} {doctor.clinic ? `· ${doctor.clinic}` : ""}
+                </div>
               </div>
             </div>
-            <div className="mt-4 space-y-1 text-[12.5px]">
+            <div className="mt-4 space-y-1.5 border-t border-ge-border pt-3 text-[12.5px]">
               <Row label="Video fee" value={formatPkr(doctor.consultFeePaisa)} />
               {doctor.clinicFeePaisa > 0 && <Row label="Clinic fee" value={formatPkr(doctor.clinicFeePaisa)} />}
               <Row label="Duration" value="20 minutes" />
@@ -99,9 +101,9 @@ export default async function BookDoctorPage({
           </Card>
           <Card className="rounded-3xl bg-ge-blue-tint p-5">
             <p className="text-[11.5px] leading-relaxed text-ge-muted">
-              <Lock className="inline h-3 w-3" /> Secure payment · Refundable up to 1 hour before. Confirmation arrives by SMS and WhatsApp.
+              <Lock className="inline h-3 w-3 text-ge-primary" /> Secure payment · Refundable up to 1 hour before. Confirmation arrives by SMS and WhatsApp.
             </p>
-            <Button asChild variant="link" size="sm" className="mt-1 px-0">
+            <Button asChild variant="link" size="sm" className="mt-2 px-0 text-ge-primary">
               <Link href={`/doctor/${slug}`}>← Back to profile</Link>
             </Button>
           </Card>
