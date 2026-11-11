@@ -3,7 +3,7 @@ import { ConsultMode, SlotStatus } from "@prisma/client";
 
 /**
  * Standard fixed daily operating hours:
- * 10:00 AM to 5:00 PM in exact 20-minute slots.
+ * 10:00 AM to 5:00 PM in exact 20-minute intervals.
  */
 export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
   { hour: 10, minute: 0 },
@@ -30,13 +30,28 @@ export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
 ];
 
 /**
- * Ensures a doctor always has upcoming rolling 7-day slots (10:00 AM – 5:00 PM, 20 mins each).
- * Respects existing slots: does NOT overwrite BLOCKED or BOOKED slots.
+ * Ensures a doctor has standard 10:00 AM – 5:00 PM (20-min) slots for a SINGLE day.
+ * Does not overwrite existing blocked/booked slots.
  */
-export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
-  const now = new Date();
+export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date = new Date()) {
+  const day = new Date(targetDate);
+  day.setHours(0, 0, 0, 0);
 
-  // Create missing standard slots for today and upcoming days
+  const nextDay = new Date(day);
+  nextDay.setDate(day.getDate() + 1);
+
+  const existing = await prisma.doctorAvailability.findMany({
+    where: {
+      doctorId,
+      startsAt: { gte: day, lt: nextDay },
+    },
+    orderBy: { startsAt: "asc" },
+  });
+
+  if (existing.length >= 21) {
+    return existing;
+  }
+
   const slotsToCreate: {
     doctorId: string;
     startsAt: Date;
@@ -45,48 +60,62 @@ export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: num
     status: SlotStatus;
   }[] = [];
 
-  for (let d = 0; d < daysAhead; d++) {
-    const day = new Date(now);
-    day.setDate(now.getDate() + d);
+  for (const { hour, minute } of DAILY_SLOT_TIMES) {
+    const startsAt = new Date(day);
+    startsAt.setHours(hour, minute, 0, 0);
+    const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
 
-    for (const { hour, minute } of DAILY_SLOT_TIMES) {
-      const startsAt = new Date(day);
-      startsAt.setHours(hour, minute, 0, 0);
-
-      // Only schedule slots that haven't passed
-      if (startsAt.getTime() > now.getTime() + 10 * 60 * 1000) {
-        const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
-        slotsToCreate.push({
-          doctorId,
-          startsAt,
-          endsAt,
-          mode: ConsultMode.VIDEO,
-          status: SlotStatus.OPEN,
-        });
-        slotsToCreate.push({
-          doctorId,
-          startsAt,
-          endsAt,
-          mode: ConsultMode.CLINIC,
-          status: SlotStatus.OPEN,
-        });
-      }
-    }
+    slotsToCreate.push({
+      doctorId,
+      startsAt,
+      endsAt,
+      mode: ConsultMode.VIDEO,
+      status: SlotStatus.OPEN,
+    });
+    slotsToCreate.push({
+      doctorId,
+      startsAt,
+      endsAt,
+      mode: ConsultMode.CLINIC,
+      status: SlotStatus.OPEN,
+    });
   }
 
   if (slotsToCreate.length > 0) {
     try {
       await prisma.doctorAvailability.createMany({
         data: slotsToCreate,
-        skipDuplicates: true, // keeps existing BLOCKED/BOOKED slots safe!
+        skipDuplicates: true,
       });
     } catch (e) {
-      console.error("[slots] Auto-generation error:", e);
+      console.error("[slots] Day slot generation error:", e);
     }
   }
 
   return prisma.doctorAvailability.findMany({
-    where: { doctorId, startsAt: { gte: now } },
+    where: {
+      doctorId,
+      startsAt: { gte: day, lt: nextDay },
+    },
     orderBy: { startsAt: "asc" },
+  });
+}
+
+/**
+ * For patient booking: ensures upcoming 7 days have bookable open slots.
+ */
+export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
+  const now = new Date();
+
+  for (let d = 0; d < daysAhead; d++) {
+    const day = new Date(now);
+    day.setDate(now.getDate() + d);
+    await ensureDoctorDaySlots(doctorId, day);
+  }
+
+  return prisma.doctorAvailability.findMany({
+    where: { doctorId, startsAt: { gte: now }, status: SlotStatus.OPEN },
+    orderBy: { startsAt: "asc" },
+    take: 48,
   });
 }

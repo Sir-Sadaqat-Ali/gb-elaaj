@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
@@ -6,14 +7,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/data/confirm-button";
 import { blockSlotAction } from "@/lib/actions/schedule";
-import { ensureDoctorUpcomingSlots } from "@/lib/slots";
+import { ensureDoctorDaySlots } from "@/lib/slots";
 import { formatDate, formatTime } from "@/lib/formatting";
-import { Video, Building, Lock, CheckCircle2, Calendar } from "lucide-react";
+import { Video, Building, Lock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Schedule" };
 
-export default async function DoctorSchedulePage() {
+export default async function DoctorSchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const session = await requireRole("DOCTOR");
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -21,154 +26,164 @@ export default async function DoctorSchedulePage() {
   });
   if (!me?.doctor) return null;
 
-  // Auto-generate rolling 7-day 10am-5pm slots (20-min intervals) if not yet populated
-  const upcoming = await ensureDoctorUpcomingSlots(me.doctor.id, 7);
+  const { date: rawDate } = await searchParams;
 
-  const totalOpen = upcoming.filter((s) => s.status === "OPEN").length;
-  const totalBlocked = upcoming.filter((s) => s.status === "BLOCKED").length;
-  const totalBooked = upcoming.filter((s) => s.status === "BOOKED").length;
+  // Selected date or real-time today by default
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // Group slots by date
-  const byDay: Record<string, typeof upcoming> = {};
-  for (const s of upcoming) {
-    const k = formatDate(s.startsAt);
-    (byDay[k] ??= []).push(s);
+  let activeDate = today;
+  if (rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    const parsed = new Date(`${rawDate}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      activeDate = parsed;
+    }
   }
 
-  const todayStr = formatDate(new Date());
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = formatDate(tomorrow);
+  // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
+  const slots = await ensureDoctorDaySlots(me.doctor.id, activeDate);
+
+  const prevDay = new Date(activeDate);
+  prevDay.setDate(prevDay.getDate() - 1);
+  const prevDateStr = prevDay.toISOString().slice(0, 10);
+
+  const nextDay = new Date(activeDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const nextDateStr = nextDay.toISOString().slice(0, 10);
+
+  const isToday = activeDate.toDateString() === today.toDateString();
+  const dateHeading = isToday ? `Today · ${formatDate(activeDate)}` : formatDate(activeDate);
+
+  const totalOpen = slots.filter((s) => s.status === "OPEN").length;
+  const totalBlocked = slots.filter((s) => s.status === "BLOCKED").length;
+  const totalBooked = slots.filter((s) => s.status === "BOOKED").length;
 
   return (
     <AppShell
       navItems={DOCTOR_NAV}
       user={{ name: me.name, role: "Doctor", image: me.image }}
-      title="Schedule & Time Slots"
-      subtitle="Standard 10:00 AM – 5:00 PM operating hours (20-min slots). You can Block or Active any slot with one tap."
+      title="Daily Schedule"
+      subtitle="Standard 10:00 AM – 5:00 PM operating hours (20-min intervals). Real-time daily view."
     >
       <div className="space-y-6">
-        {/* KPI strip */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
+        {/* Single Day Card */}
+        <Card className="rounded-3xl border border-ge-border bg-white p-6 shadow-xs">
+          {/* Header with Date Navigation */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ge-border pb-5">
             <div>
-              <div className="text-[22px] font-bold text-ge-ink">{totalOpen}</div>
-              <div className="text-[12px] text-ge-muted">Active / Bookable Slots</div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-[18px] font-bold text-ge-ink">{dateHeading}</h2>
+                {isToday && (
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                    Live Today
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[12.5px] text-ge-muted">
+                10:00 AM to 5:00 PM (20-min slots) · {totalOpen} active, {totalBlocked} blocked, {totalBooked} booked
+              </p>
             </div>
-          </Card>
 
-          <Card className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <Lock className="h-5 w-5" />
+            {/* Date Switcher */}
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/doctor/schedule?date=${prevDateStr}`}
+                className="inline-flex h-9 items-center gap-1 rounded-xl border border-ge-border bg-white px-3 text-[12px] font-medium text-ge-ink transition hover:bg-ge-soft-bg"
+              >
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </Link>
+
+              {!isToday && (
+                <Link
+                  href="/doctor/schedule"
+                  className="inline-flex h-9 items-center rounded-xl bg-ge-primary px-3 text-[12px] font-medium text-white transition hover:bg-ge-primary-2"
+                >
+                  Today
+                </Link>
+              )}
+
+              <Link
+                href={`/doctor/schedule?date=${nextDateStr}`}
+                className="inline-flex h-9 items-center gap-1 rounded-xl border border-ge-border bg-white px-3 text-[12px] font-medium text-ge-ink transition hover:bg-ge-soft-bg"
+              >
+                Next <ChevronRight className="h-4 w-4" />
+              </Link>
             </div>
-            <div>
-              <div className="text-[22px] font-bold text-ge-ink">{totalBlocked}</div>
-              <div className="text-[12px] text-ge-muted">Blocked By You</div>
-            </div>
-          </Card>
+          </div>
 
-          <Card className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-ge-primary">
-              <Calendar className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-[22px] font-bold text-ge-ink">{totalBooked}</div>
-              <div className="text-[12px] text-ge-muted">Booked by Patients</div>
-            </div>
-          </Card>
-        </div>
+          {/* Quick Summary Pill Bar */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5" /> {totalOpen} Active Slots
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 font-medium text-neutral-700 border border-neutral-300">
+              <Lock className="h-3.5 w-3.5" /> {totalBlocked} Blocked
+            </span>
+            {totalBooked > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-medium text-ge-primary border border-blue-200">
+                ● {totalBooked} Booked
+              </span>
+            )}
+          </div>
 
-        {/* Info banner */}
-        <div className="rounded-2xl border border-ge-border bg-white p-4 text-[13px] text-ge-muted">
-          <span className="font-semibold text-ge-ink">Daily Operating Hours:</span> 10:00 AM to 5:00 PM in 20-minute slots. Dates roll forward automatically every day. Click <strong>Block</strong> on any slot when you are not available.
-        </div>
-
-        {/* Days & Slots */}
-        <div className="space-y-5">
-          {Object.entries(byDay).map(([day, list]) => {
-            const isToday = day === todayStr;
-            const isTomorrow = day === tomorrowStr;
-            const dayLabel = isToday ? `Today (${day})` : isTomorrow ? `Tomorrow (${day})` : day;
-
-            return (
-              <Card key={day} className="rounded-3xl border border-ge-border bg-white p-6 shadow-xs">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ge-border pb-4">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-[15px] font-semibold text-ge-ink">{dayLabel}</h3>
-                    {isToday && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                        Today
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[12px] text-ge-muted">
-                    {list.filter((s) => s.status === "OPEN").length} active · {list.filter((s) => s.status === "BLOCKED").length} blocked
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {list.map((s) => (
-                    <div
-                      key={s.id}
-                      className={`flex items-center justify-between gap-2 rounded-2xl border p-3 transition ${
-                        s.status === "OPEN"
-                          ? "border-emerald-200 bg-emerald-50/40"
-                          : s.status === "BLOCKED"
-                          ? "border-neutral-200 bg-neutral-50/80 opacity-75"
-                          : "border-blue-200 bg-blue-50/50"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-[13px] text-ge-ink">
-                            {formatTime(s.startsAt)}
-                          </span>
-                          <span className="text-[11px] text-ge-muted inline-flex items-center gap-0.5">
-                            {s.mode === "VIDEO" ? (
-                              <Video className="h-3 w-3 text-ge-primary" />
-                            ) : (
-                              <Building className="h-3 w-3 text-emerald-600" />
-                            )}
-                            {s.mode === "VIDEO" ? "Video" : "Clinic"}
-                          </span>
-                        </div>
-                        <div className="mt-1">
-                          <Badge
-                            variant={
-                              s.status === "BOOKED"
-                                ? "info"
-                                : s.status === "OPEN"
-                                ? "success"
-                                : "neutral"
-                            }
-                          >
-                            {s.status === "OPEN" ? "Active" : s.status === "BLOCKED" ? "Blocked" : "Booked"}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {s.status !== "BOOKED" ? (
-                        <ConfirmButton
-                          action={blockSlotAction}
-                          arg={{ slotId: s.id }}
-                          label={s.status === "BLOCKED" ? "Active" : "Block"}
-                          variant={s.status === "BLOCKED" ? "primary" : "ghost"}
-                          successMsg={s.status === "BLOCKED" ? "Slot is now active." : "Slot blocked."}
-                          className="h-7 px-3 text-[11.5px]"
-                        />
+          {/* 10:00 AM – 5:00 PM Slots Grid (Exactly 1 day) */}
+          <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {slots.map((s) => (
+              <div
+                key={s.id}
+                className={`flex items-center justify-between gap-2 rounded-2xl border p-3 transition ${
+                  s.status === "OPEN"
+                    ? "border-emerald-200 bg-emerald-50/40"
+                    : s.status === "BLOCKED"
+                    ? "border-neutral-200 bg-neutral-50/80 opacity-75"
+                    : "border-blue-200 bg-blue-50/50"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-[13px] text-ge-ink">
+                      {formatTime(s.startsAt)}
+                    </span>
+                    <span className="text-[11px] text-ge-muted inline-flex items-center gap-0.5">
+                      {s.mode === "VIDEO" ? (
+                        <Video className="h-3 w-3 text-ge-primary" />
                       ) : (
-                        <span className="text-[11px] font-semibold text-ge-primary">Booked</span>
+                        <Building className="h-3 w-3 text-emerald-600" />
                       )}
-                    </div>
-                  ))}
+                      {s.mode === "VIDEO" ? "Video" : "Clinic"}
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <Badge
+                      variant={
+                        s.status === "BOOKED"
+                          ? "info"
+                          : s.status === "OPEN"
+                          ? "success"
+                          : "neutral"
+                      }
+                    >
+                      {s.status === "OPEN" ? "Active" : s.status === "BLOCKED" ? "Blocked" : "Booked"}
+                    </Badge>
+                  </div>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
+
+                {s.status !== "BOOKED" ? (
+                  <ConfirmButton
+                    action={blockSlotAction}
+                    arg={{ slotId: s.id }}
+                    label={s.status === "BLOCKED" ? "Active" : "Block"}
+                    variant={s.status === "BLOCKED" ? "primary" : "ghost"}
+                    successMsg={s.status === "BLOCKED" ? "Slot is now active." : "Slot blocked."}
+                    className="h-7 px-3 text-[11.5px]"
+                  />
+                ) : (
+                  <span className="text-[11px] font-semibold text-ge-primary">Booked</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     </AppShell>
   );
