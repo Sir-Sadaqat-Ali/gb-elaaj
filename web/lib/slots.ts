@@ -2,22 +2,41 @@ import { prisma } from "@/lib/db";
 import { ConsultMode, SlotStatus } from "@prisma/client";
 
 /**
- * Ensures a doctor always has upcoming open slots for booking.
- * If slots have expired (e.g. past days from seed), automatically generates
- * open slots for the next 7 days for both Video and Clinic modes.
+ * Standard fixed daily operating hours:
+ * 10:00 AM to 5:00 PM in exact 20-minute slots.
  */
-export async function ensureDoctorUpcomingSlots(doctorId: string) {
+export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
+  { hour: 10, minute: 0 },
+  { hour: 10, minute: 20 },
+  { hour: 10, minute: 40 },
+  { hour: 11, minute: 0 },
+  { hour: 11, minute: 20 },
+  { hour: 11, minute: 40 },
+  { hour: 12, minute: 0 },
+  { hour: 12, minute: 20 },
+  { hour: 12, minute: 40 },
+  { hour: 13, minute: 0 },
+  { hour: 13, minute: 20 },
+  { hour: 13, minute: 40 },
+  { hour: 14, minute: 0 },
+  { hour: 14, minute: 20 },
+  { hour: 14, minute: 40 },
+  { hour: 15, minute: 0 },
+  { hour: 15, minute: 20 },
+  { hour: 15, minute: 40 },
+  { hour: 16, minute: 0 },
+  { hour: 16, minute: 20 },
+  { hour: 16, minute: 40 },
+];
+
+/**
+ * Ensures a doctor always has upcoming rolling 7-day slots (10:00 AM – 5:00 PM, 20 mins each).
+ * Respects existing slots: does NOT overwrite BLOCKED or BOOKED slots.
+ */
+export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
   const now = new Date();
-  const existing = await prisma.doctorAvailability.findMany({
-    where: { doctorId, startsAt: { gte: now }, status: SlotStatus.OPEN },
-    orderBy: { startsAt: "asc" },
-    take: 36,
-  });
 
-  if (existing.length >= 6) {
-    return existing;
-  }
-
+  // Create missing standard slots for today and upcoming days
   const slotsToCreate: {
     doctorId: string;
     startsAt: Date;
@@ -26,29 +45,16 @@ export async function ensureDoctorUpcomingSlots(doctorId: string) {
     status: SlotStatus;
   }[] = [];
 
-  for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < daysAhead; d++) {
     const day = new Date(now);
     day.setDate(now.getDate() + d);
 
-    const times = [
-      [10, 0],
-      [10, 30],
-      [11, 0],
-      [11, 30],
-      [14, 0],
-      [14, 30],
-      [15, 0],
-      [15, 30],
-      [16, 0],
-      [16, 30],
-    ];
-
-    for (const [hour, minute] of times) {
+    for (const { hour, minute } of DAILY_SLOT_TIMES) {
       const startsAt = new Date(day);
       startsAt.setHours(hour, minute, 0, 0);
 
-      // Only schedule future slots at least 15 min from current time
-      if (startsAt.getTime() > now.getTime() + 15 * 60 * 1000) {
+      // Only schedule slots that haven't passed
+      if (startsAt.getTime() > now.getTime() + 10 * 60 * 1000) {
         const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
         slotsToCreate.push({
           doctorId,
@@ -72,16 +78,15 @@ export async function ensureDoctorUpcomingSlots(doctorId: string) {
     try {
       await prisma.doctorAvailability.createMany({
         data: slotsToCreate,
-        skipDuplicates: true,
+        skipDuplicates: true, // keeps existing BLOCKED/BOOKED slots safe!
       });
     } catch (e) {
-      console.error("[slots] Auto-generate slots fallback:", e);
+      console.error("[slots] Auto-generation error:", e);
     }
   }
 
   return prisma.doctorAvailability.findMany({
-    where: { doctorId, startsAt: { gte: now }, status: SlotStatus.OPEN },
+    where: { doctorId, startsAt: { gte: now } },
     orderBy: { startsAt: "asc" },
-    take: 36,
   });
 }
