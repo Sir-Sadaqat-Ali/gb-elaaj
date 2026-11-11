@@ -5,16 +5,23 @@
 @tailwind utilities;
 
 @layer base {
-  * {
+  *, *::before, *::after {
     @apply border-border;
+    box-sizing: border-box;
   }
-  html, body {
+  html {
     height: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "ss01", "cv02", "cv11";
     text-rendering: optimizeLegibility;
+    min-height: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    position: relative;
   }
   /* Focus ring — applied to every interactive element */
   :where(button, a, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
@@ -26,6 +33,21 @@
   ::selection {
     background: color-mix(in srgb, var(--ge-primary) 28%, transparent);
     color: var(--ge-ink);
+  }
+
+  /* Prevent bottom/horizontal scrollbars on mobile viewports */
+  @media (max-width: 768px) {
+    html, body {
+      overflow-x: hidden !important;
+      max-width: 100vw !important;
+    }
+    ::-webkit-scrollbar:horizontal {
+      height: 0px !important;
+      display: none !important;
+    }
+    * {
+      scrollbar-width: thin;
+    }
   }
 }
 

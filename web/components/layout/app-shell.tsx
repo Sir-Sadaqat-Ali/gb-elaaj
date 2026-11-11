@@ -32,7 +32,7 @@ export function AppShell({
           navItems={navItems}
           search={search}
         />
-        <main id="main" className="flex-1 overflow-auto p-4 md:p-6">
+        <main id="main" className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           <EmailVerifyBanner />
           {children}
         </main>
