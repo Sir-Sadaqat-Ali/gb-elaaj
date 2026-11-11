@@ -42,7 +42,11 @@ export function BookingFlow({
   const [pending, start] = React.useTransition();
 
   const fee = mode === "VIDEO" ? videoFeePaisa : clinicFeePaisa || videoFeePaisa;
-  const slotsForMode = availability.filter((s) => s.mode === mode);
+  const slotsForMode = availability.filter((s) => {
+    if (s.mode !== mode) return false;
+    const h = new Date(s.startsAt).getHours();
+    return h >= 10 && h < 17; // standard 10:00 AM – 5:00 PM operating hours only
+  });
   const grouped = React.useMemo(() => groupByDay(slotsForMode), [slotsForMode]);
   const selectedSlot = availability.find((s) => s.id === slotId) ?? null;
 
@@ -76,9 +80,20 @@ export function BookingFlow({
   }
 
   return (
-    <div>
-      {/* Stepper */}
-      <ol className="mb-6 flex items-center gap-2">
+    <div className="w-full min-w-0">
+      {/* Mobile Stepper: compact and 100% responsive, never overflows */}
+      <div className="mb-4 sm:hidden flex items-center justify-between rounded-2xl bg-white border border-ge-border px-3.5 py-2.5 text-[12.5px]">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ge-primary text-white text-[11px] font-bold">
+            {step + 1}
+          </span>
+          <span className="font-semibold text-ge-ink">{STEPS[step]}</span>
+        </div>
+        <span className="text-[11px] text-ge-muted font-medium">Step {step + 1} of 4</span>
+      </div>
+
+      {/* Desktop Stepper */}
+      <ol className="mb-6 hidden sm:flex items-center gap-2">
         {STEPS.map((label, i) => (
           <React.Fragment key={label}>
             <li
@@ -86,7 +101,7 @@ export function BookingFlow({
               onClick={() => i < step && setStep(i)}
             >
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold ${
+                className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold shrink-0 ${
                   i < step ? "bg-ge-success text-white" : i === step ? "bg-ge-primary text-white" : "border border-ge-border bg-white text-ge-muted"
                 }`}
               >
@@ -99,19 +114,31 @@ export function BookingFlow({
         ))}
       </ol>
 
-      <Card className="rounded-3xl p-6 md:p-7">
+      <Card className="rounded-3xl p-4 sm:p-6 md:p-7 w-full max-w-full min-w-0">
         {step === 0 && (
           <ChooseMode
             mode={mode}
             setMode={(m) => {
               setMode(m);
-              const first = availability.find((s) => s.mode === m);
+              const first = availability.find((s) => {
+                if (s.mode !== m) return false;
+                const h = new Date(s.startsAt).getHours();
+                return h >= 10 && h < 17;
+              });
               setSlotId(first?.id ?? null);
             }}
             videoFeePaisa={videoFeePaisa}
             clinicFeePaisa={clinicFeePaisa}
-            videoCount={availability.filter((s) => s.mode === "VIDEO").length}
-            clinicCount={availability.filter((s) => s.mode === "CLINIC").length}
+            videoCount={availability.filter((s) => {
+              if (s.mode !== "VIDEO") return false;
+              const h = new Date(s.startsAt).getHours();
+              return h >= 10 && h < 17;
+            }).length}
+            clinicCount={availability.filter((s) => {
+              if (s.mode !== "CLINIC") return false;
+              const h = new Date(s.startsAt).getHours();
+              return h >= 10 && h < 17;
+            }).length}
           />
         )}
         {step === 1 && (

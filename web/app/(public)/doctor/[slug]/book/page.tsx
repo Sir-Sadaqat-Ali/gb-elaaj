@@ -60,8 +60,8 @@ export default async function BookDoctorPage({
         </div>
       </div>
 
-      <div className="ge-container grid gap-6 pt-6 md:grid-cols-[1fr_320px]">
-        <div>
+      <div className="ge-container grid gap-6 pt-4 sm:pt-6 md:grid-cols-[1fr_320px] w-full max-w-full min-w-0">
+        <div className="w-full min-w-0">
           <BookingFlow
             doctorSlug={doctor.slug}
             doctorName={doctor.user.name}
@@ -76,8 +76,8 @@ export default async function BookDoctorPage({
           />
         </div>
 
-        <aside className="order-first space-y-4 md:order-last md:sticky md:top-20 md:self-start">
-          <Card className="rounded-3xl border border-ge-border bg-white p-5 shadow-card">
+        <aside className="order-first space-y-4 md:order-last md:sticky md:top-20 md:self-start w-full min-w-0">
+          <Card className="rounded-3xl border border-ge-border bg-white p-4 sm:p-5 shadow-card w-full min-w-0">
             <div className="flex items-center gap-3">
               <Avatar src={doctor.user.image} name={doctor.user.name} size={52} />
               <div className="min-w-0 flex-1">
@@ -88,7 +88,7 @@ export default async function BookDoctorPage({
                 <div className="text-[12.5px] font-medium text-ge-primary">
                   {doctor.specialties[0]?.specialty.nameEn ?? "Specialist"}
                 </div>
-                <div className="text-[11.5px] text-ge-muted">
+                <div className="text-[11.5px] text-ge-muted truncate">
                   {doctor.city.nameEn} {doctor.clinic ? `· ${doctor.clinic}` : ""}
                 </div>
               </div>
@@ -99,7 +99,7 @@ export default async function BookDoctorPage({
               <Row label="Duration" value="20 minutes" />
             </div>
           </Card>
-          <Card className="rounded-3xl bg-ge-blue-tint p-5">
+          <Card className="rounded-3xl bg-ge-blue-tint p-4 sm:p-5 w-full min-w-0">
             <p className="text-[11.5px] leading-relaxed text-ge-muted">
               <Lock className="inline h-3 w-3 text-ge-primary" /> Secure payment · Refundable up to 1 hour before. Confirmation arrives by SMS and WhatsApp.
             </p>
@@ -115,9 +115,9 @@ export default async function BookDoctorPage({
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-ge-muted">{label}</span>
-      <span className="font-semibold text-ge-ink">{value}</span>
+    <div className="flex items-center justify-between py-1 gap-2 min-w-0">
+      <span className="text-ge-muted text-[13px]">{label}</span>
+      <span className="font-semibold text-ge-ink text-[13px] shrink-0 text-right">{value}</span>
     </div>
   );
 }

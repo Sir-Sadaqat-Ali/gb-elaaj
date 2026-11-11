@@ -101,11 +101,19 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
     } : undefined,
   };
 
-  // group slots by day label
+  // group slots by day label, strictly 10am-5pm, and deduplicate times
   const slotsByDay: Record<string, typeof availability> = {};
   for (const slot of availability) {
+    const d = new Date(slot.startsAt);
+    const h = d.getHours();
+    if (h < 10 || h >= 17) continue; // strictly 10:00 AM – 5:00 PM
+
     const key = formatDate(slot.startsAt);
-    (slotsByDay[key] ??= []).push(slot);
+    const list = (slotsByDay[key] ??= []);
+    // Deduplicate so exact same time never appears twice side-by-side
+    if (!list.some((existing) => new Date(existing.startsAt).getTime() === d.getTime())) {
+      list.push(slot);
+    }
   }
   const dayKeys = Object.keys(slotsByDay).slice(0, 5);
 
