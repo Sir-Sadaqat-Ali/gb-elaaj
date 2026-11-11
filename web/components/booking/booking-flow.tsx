@@ -34,7 +34,7 @@ export function BookingFlow({
     ? availability.find((s) => s.id === preSelectSlotId) ?? null
     : availability[0] ?? null;
 
-  const [step, setStep] = React.useState(0);
+  const [step, setStep] = React.useState(Boolean(preSelectSlotId && initialSlot) ? 2 : 0);
   const [mode, setMode] = React.useState<"VIDEO" | "CLINIC">(initialSlot?.mode ?? "VIDEO");
   const [slotId, setSlotId] = React.useState<string | null>(initialSlot?.id ?? null);
   const [symptoms, setSymptoms] = React.useState("");
@@ -81,7 +81,10 @@ export function BookingFlow({
       <ol className="mb-6 flex items-center gap-2">
         {STEPS.map((label, i) => (
           <React.Fragment key={label}>
-            <li className="flex items-center gap-2">
+            <li
+              className={`flex items-center gap-2 ${i < step ? "cursor-pointer" : ""}`}
+              onClick={() => i < step && setStep(i)}
+            >
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold ${
                   i < step ? "bg-ge-success text-white" : i === step ? "bg-ge-primary text-white" : "border border-ge-border bg-white text-ge-muted"
@@ -115,7 +118,33 @@ export function BookingFlow({
           <ChooseSlot doctorName={doctorName} grouped={grouped} slotId={slotId} setSlotId={setSlotId} />
         )}
         {step === 2 && (
-          <Symptoms symptoms={symptoms} setSymptoms={setSymptoms} />
+          <div>
+            {selectedSlot && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ge-border bg-ge-soft-bg p-3.5 text-[12.5px]">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ge-primary text-white">
+                    {mode === "VIDEO" ? <Video className="h-4 w-4" /> : <Building className="h-4 w-4" />}
+                  </span>
+                  <div>
+                    <div className="font-semibold text-ge-ink">
+                      {formatDate(new Date(selectedSlot.startsAt))} · {formatTime(new Date(selectedSlot.startsAt))}
+                    </div>
+                    <div className="text-[11.5px] text-ge-muted">
+                      {mode === "VIDEO" ? "Video Consultation" : "Clinic Visit"} with {doctorName}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-[12px] font-semibold text-ge-primary hover:underline"
+                >
+                  Change time
+                </button>
+              </div>
+            )}
+            <Symptoms symptoms={symptoms} setSymptoms={setSymptoms} />
+          </div>
         )}
         {step === 3 && (
           <Confirm

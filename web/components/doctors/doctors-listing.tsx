@@ -161,8 +161,8 @@ export async function DoctorsListing({
         </div>
       </section>
 
-      <div className="ge-container grid gap-6 py-10 md:grid-cols-[260px_1fr]">
-        <aside className="sticky top-24 self-start rounded-3xl border border-ge-border bg-white p-6">
+      <div className="ge-container grid gap-6 py-6 md:py-10 md:grid-cols-[260px_1fr]">
+        <aside className="static md:sticky md:top-24 self-start rounded-3xl border border-ge-border bg-white p-5 sm:p-6 shadow-xs">
           <h2 className="text-sm font-semibold text-ge-ink">Filters</h2>
           <p className="mt-1 text-xs text-ge-muted">Refine your search.</p>
           <div className="mt-4 space-y-4">
