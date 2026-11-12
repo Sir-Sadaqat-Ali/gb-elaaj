@@ -165,9 +165,9 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
 }
 
 /**
- * For patient booking: ensures today and tomorrow have all 21 slots generated.
+ * For patient booking: ensures upcoming 7 days have all 21 slots generated.
  */
-export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 2) {
+export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
   const now = new Date();
   const dateIso = formatPktDateIso(now);
   const [year, month, day] = dateIso.split("-").map(Number);

@@ -62,12 +62,29 @@ export default async function DoctorProfilePage({
   const todayIso = formatPktDateIso(new Date());
   const now = new Date();
   const [ty, tm, td] = todayIso.split("-").map(Number);
-  const tomorrowDate = new Date(Date.UTC(ty, tm - 1, td + 1, 5, 0, 0, 0));
-  const tomorrowIso = formatPktDateIso(tomorrowDate);
+
+  // Generate next 7 days in PKT for the Date Picker strip
+  const daysList: { iso: string; dayName: string; dateFormatted: string; isToday: boolean }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.UTC(ty, tm - 1, td + i, 5, 0, 0, 0));
+    const iso = formatPktDateIso(d);
+    const dayName =
+      i === 0
+        ? "Today"
+        : i === 1
+        ? "Tomorrow"
+        : new Intl.DateTimeFormat("en-PK", { timeZone: "Asia/Karachi", weekday: "short" }).format(d);
+    const dateFormatted = new Intl.DateTimeFormat("en-PK", {
+      timeZone: "Asia/Karachi",
+      day: "numeric",
+      month: "short",
+    }).format(d);
+    daysList.push({ iso, dayName, dateFormatted, isToday: i === 0 });
+  }
 
   // If after 5 PM PKT, today's operating hours have ended; default to tomorrow
   const isPastTodayOperatingHours = getPktHour(now) >= 17;
-  const defaultDateIso = isPastTodayOperatingHours ? tomorrowIso : todayIso;
+  const defaultDateIso = isPastTodayOperatingHours ? daysList[1]!.iso : todayIso;
   const activeDateIso = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : defaultDateIso;
 
   const [ay, am, ad] = activeDateIso.split("-").map(Number);
@@ -75,6 +92,11 @@ export default async function DoctorProfilePage({
 
   // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
   const daySlots = await ensureDoctorDaySlots(doctor.id, activeDateIso);
+
+  const activeDayObj = daysList.find((d) => d.iso === activeDateIso) ?? {
+    dayName: formatDate(activeDate, { weekday: "short" }),
+    dateFormatted: formatDate(activeDate, { day: "numeric", month: "short" }),
+  };
 
   // Aggregate standard 21 slots for the active day without duplicates
   const slotPills = DAILY_SLOT_TIMES.map(({ hour, minute }) => {
@@ -203,40 +225,44 @@ export default async function DoctorProfilePage({
 
           {/* Available Slots Section (Strictly 1 day view, all 21 slots) */}
           <Card id="slots" className="rounded-3xl p-6 scroll-mt-24">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ge-border pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[16px] font-bold text-ge-ink">
-                    {activeDateIso === todayIso ? `Today · ${formatDate(activeDate)}` : `Tomorrow · ${formatDate(activeDate)}`}
-                  </h2>
-                  <Badge variant="success">Live availability</Badge>
+            <div className="border-b border-ge-border pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[17px] font-bold text-ge-ink">
+                      {activeDateIso === todayIso ? "Today" : activeDayObj.dayName} · {activeDayObj.dateFormatted}
+                    </h2>
+                    <Badge variant="success">Live availability</Badge>
+                  </div>
+                  <p className="mt-1 text-[12px] text-ge-muted">
+                    Standard 10:00 AM – 5:00 PM (20-min slots). Tap a date, then pick a time.
+                  </p>
                 </div>
-                <p className="mt-1 text-[12px] text-ge-muted">
-                  Standard 10:00 AM – 5:00 PM (20-min slots). Tap a slot to book instantly.
-                </p>
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-2xl bg-ge-soft-bg p-1 border border-ge-border">
-                <Link
-                  href={`/doctor/${slug}?date=${todayIso}#slots`}
-                  className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${
-                    activeDateIso === todayIso
-                      ? "bg-white text-ge-primary shadow-xs"
-                      : "text-ge-muted hover:text-ge-ink"
-                  }`}
-                >
-                  Today
-                </Link>
-                <Link
-                  href={`/doctor/${slug}?date=${tomorrowIso}#slots`}
-                  className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${
-                    activeDateIso === tomorrowIso
-                      ? "bg-white text-ge-primary shadow-xs"
-                      : "text-ge-muted hover:text-ge-ink"
-                  }`}
-                >
-                  Tomorrow
-                </Link>
+              {/* 7-Day Date Picker Strip */}
+              <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {daysList.map((d) => {
+                  const isActive = d.iso === activeDateIso;
+                  return (
+                    <Link
+                      key={d.iso}
+                      href={`/doctor/${slug}?date=${d.iso}#slots`}
+                      className={`flex shrink-0 flex-col items-center justify-center rounded-2xl px-3.5 py-2 text-center transition min-w-[80px] ${
+                        isActive
+                          ? "border-2 border-ge-primary bg-ge-primary text-white shadow-xs"
+                          : "border border-ge-border bg-white text-ge-ink hover:border-ge-primary/50 hover:bg-ge-blue-tint/30"
+                      }`}
+                    >
+                      <span className={`text-[11px] font-medium ${isActive ? "text-white/85" : "text-ge-muted"}`}>
+                        {d.dayName}
+                      </span>
+                      <span className="text-[13px] font-bold">
+                        {d.dateFormatted}
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 

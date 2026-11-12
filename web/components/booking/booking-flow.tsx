@@ -275,6 +275,9 @@ function ChooseSlot({
   slotId: string | null;
   onSelectSlot: (id: string) => void;
 }) {
+  const [selectedDayIndex, setSelectedDayIndex] = React.useState(0);
+  const activeGroup = grouped[selectedDayIndex] ?? grouped[0];
+
   return (
     <div>
       <h2 className="ge-display text-[22px] font-semibold text-ge-navy">Pick a date and time</h2>
@@ -282,12 +285,34 @@ function ChooseSlot({
       {grouped.length === 0 ? (
         <p className="mt-5 text-sm text-ge-muted">No upcoming slots. Please check back tomorrow.</p>
       ) : (
-        <div className="mt-5 space-y-6">
-          {grouped.map((g) => (
-            <div key={g.day} className="rounded-2xl border border-ge-border bg-ge-soft-bg/30 p-4">
-              <div className="mb-3 text-[13px] font-bold text-ge-navy">{g.day}</div>
+        <div className="mt-5 space-y-5">
+          {/* 7-Day Horizontal Selector */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {grouped.map((g, idx) => {
+              const isActive = idx === selectedDayIndex;
+              return (
+                <button
+                  type="button"
+                  key={g.day}
+                  onClick={() => setSelectedDayIndex(idx)}
+                  className={`flex shrink-0 items-center justify-center rounded-2xl px-4 py-2 text-center text-[12.5px] font-semibold transition min-w-[90px] ${
+                    isActive
+                      ? "border-2 border-ge-primary bg-ge-primary text-white shadow-xs"
+                      : "border border-ge-border bg-white text-ge-ink hover:border-ge-primary/50 hover:bg-ge-blue-tint/30"
+                  }`}
+                >
+                  {g.day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Slots for Selected Day Only */}
+          {activeGroup && (
+            <div className="rounded-2xl border border-ge-border bg-ge-soft-bg/30 p-4">
+              <div className="mb-3 text-[13px] font-bold text-ge-navy">{activeGroup.day}</div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7">
-                {g.slots.map((s) => {
+                {activeGroup.slots.map((s) => {
                   const isPast = new Date(s.startsAt).getTime() < Date.now();
                   const isBooked = s.status === "BOOKED";
                   const isBlocked = s.status === "BLOCKED";
@@ -366,7 +391,7 @@ function ChooseSlot({
                 })}
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

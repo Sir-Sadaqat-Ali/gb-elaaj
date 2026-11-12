@@ -30,6 +30,27 @@ export default async function DoctorSchedulePage({
 
   // Selected date or real-time today in Pakistan Time
   const todayIso = formatPktDateIso(new Date());
+  const [ty, tm, td] = todayIso.split("-").map(Number);
+
+  // Generate next 7 days in PKT for quick navigation
+  const daysList: { iso: string; dayName: string; dateFormatted: string; isToday: boolean }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.UTC(ty, tm - 1, td + i, 5, 0, 0, 0));
+    const iso = formatPktDateIso(d);
+    const dayName =
+      i === 0
+        ? "Today"
+        : i === 1
+        ? "Tomorrow"
+        : new Intl.DateTimeFormat("en-PK", { timeZone: "Asia/Karachi", weekday: "short" }).format(d);
+    const dateFormatted = new Intl.DateTimeFormat("en-PK", {
+      timeZone: "Asia/Karachi",
+      day: "numeric",
+      month: "short",
+    }).format(d);
+    daysList.push({ iso, dayName, dateFormatted, isToday: i === 0 });
+  }
+
   const activeDateIso = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayIso;
   const [y, m, d] = activeDateIso.split("-").map(Number);
   const activeDate = new Date(Date.UTC(y, m - 1, d, 5, 0, 0, 0)); // 10 AM PKT
@@ -101,6 +122,27 @@ export default async function DoctorSchedulePage({
                 Next <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
+          </div>
+
+          {/* 7-Day Quick Switcher Strip */}
+          <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-ge-border pb-3">
+            {daysList.map((d) => {
+              const isActive = d.iso === activeDateIso;
+              return (
+                <Link
+                  key={d.iso}
+                  href={`/doctor/schedule?date=${d.iso}`}
+                  className={`flex shrink-0 items-center justify-center gap-1.5 rounded-2xl px-3.5 py-1.5 text-center text-[12px] font-semibold transition ${
+                    isActive
+                      ? "border-2 border-ge-primary bg-ge-primary text-white shadow-xs"
+                      : "border border-ge-border bg-white text-ge-ink hover:border-ge-primary/50 hover:bg-ge-blue-tint/30"
+                  }`}
+                >
+                  <span className={isActive ? "text-white/80" : "text-ge-muted"}>{d.dayName}</span>
+                  <span>{d.dateFormatted}</span>
+                </Link>
+              );
+            })}
           </div>
 
           {/* Quick Summary Pill Bar */}
