@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { IconTile } from "@/components/marketing/bits";
 import { StickyBookBar } from "@/components/booking/sticky-book-bar";
+import { DoctorCalendarSlots } from "@/components/booking/doctor-calendar-slots";
 import { formatPkr, formatTime, formatDate, maskLicense, formatPktDateIso } from "@/lib/formatting";
 import { ensureDoctorDaySlots, DAILY_SLOT_TIMES, getPktHour } from "@/lib/slots";
 
@@ -182,40 +183,40 @@ export default async function DoctorProfilePage({
         </div>
       </div>
 
-      <div className="ge-container grid gap-6 pt-6 md:grid-cols-[1fr_360px]">
-        <div className="space-y-5">
+      <div className="ge-container grid gap-6 pt-4 sm:pt-6 md:grid-cols-[1fr_360px] w-full max-w-full min-w-0">
+        <div className="space-y-5 w-full min-w-0 max-w-full">
           {/* Hero */}
-          <Card className="rounded-3xl border-0 p-6 shadow-card md:p-7">
-            <div className="flex flex-col gap-5 md:flex-row md:items-start">
-              <div className="relative">
-                <Avatar src={doctor.user.image} name={doctor.user.name} size={120} className="ring-4 ring-ge-blue-tint" />
+          <Card className="rounded-3xl border-0 p-4 sm:p-6 md:p-7 shadow-card w-full max-w-full min-w-0">
+            <div className="flex flex-col gap-4 sm:gap-5 sm:flex-row sm:items-start">
+              <div className="relative shrink-0">
+                <Avatar src={doctor.user.image} name={doctor.user.name} size={100} className="sm:h-[120px] sm:w-[120px] ring-4 ring-ge-blue-tint" />
                 <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-ge-success" aria-hidden />
               </div>
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="ge-display text-[28px] text-ge-ink">{doctor.user.name}</h1>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="ge-display text-[24px] sm:text-[28px] text-ge-ink">{doctor.user.name}</h1>
                   <VerifiedBadge />
                   {isPatient && <SaveDoctorButton doctorId={doctor.id} initialSaved={initialSaved} className="ml-1" />}
                 </div>
-                <div className="mt-1 text-[14px] font-medium text-ge-primary">
+                <div className="mt-1 text-[13.5px] font-medium text-ge-primary">
                   {doctor.specialties.map((s) => s.specialty.nameEn).join(" · ")}
                 </div>
-                <div className="mt-1 text-[13px] text-ge-muted">{doctor.qualifications}</div>
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[12px] text-ge-muted">
-                  <span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {doctor.experienceYears} yrs experience</span>
+                <div className="mt-0.5 text-[12.5px] text-ge-muted">{doctor.qualifications}</div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-ge-muted">
+                  <span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {doctor.experienceYears} yrs exp</span>
                   <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {doctor.clinic ?? doctor.city.nameEn}</span>
                   <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" /> {doctor.languages.join(", ")}</span>
                 </div>
-                <dl className="mt-5 grid grid-cols-4 gap-0 rounded-2xl bg-ge-soft-bg p-4">
+                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-0 rounded-2xl bg-ge-soft-bg p-3 sm:p-4">
                   {[
                     { v: `${doctor.ratingAvg.toFixed(1)}★`, l: `${doctor.ratingCount} reviews` },
-                    { v: `${doctor.satisfactionPct}%`, l: "Satisfied patients" },
+                    { v: `${doctor.satisfactionPct}%`, l: "Satisfied" },
                     { v: `~${20} min`, l: "Avg slot" },
-                    { v: `${doctor.modes.length}`, l: "Consult modes" },
+                    { v: `${doctor.modes.length}`, l: "Modes" },
                   ].map((s, i) => (
-                    <div key={s.l} className={i ? "border-l border-ge-border pl-4" : ""}>
-                      <dt className="ge-display text-[19px] text-ge-navy">{s.v}</dt>
-                      <dd className="mt-0.5 text-[11px] text-ge-muted">{s.l}</dd>
+                    <div key={s.l} className={i ? "sm:border-l sm:border-ge-border sm:pl-3 p-1" : "p-1"}>
+                      <dt className="ge-display text-[17px] sm:text-[19px] text-ge-navy">{s.v}</dt>
+                      <dd className="mt-0.5 text-[11px] text-ge-muted leading-tight">{s.l}</dd>
                     </div>
                   ))}
                 </dl>
@@ -223,119 +224,17 @@ export default async function DoctorProfilePage({
             </div>
           </Card>
 
-          {/* Available Slots Section (Strictly 1 day view, all 21 slots) */}
-          <Card id="slots" className="rounded-3xl p-6 scroll-mt-24">
-            <div className="border-b border-ge-border pb-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-[17px] font-bold text-ge-ink">
-                      {activeDateIso === todayIso ? "Today" : activeDayObj.dayName} · {activeDayObj.dateFormatted}
-                    </h2>
-                    <Badge variant="success">Live availability</Badge>
-                  </div>
-                  <p className="mt-1 text-[12px] text-ge-muted">
-                    Standard 10:00 AM – 5:00 PM (20-min slots). Tap a date, then pick a time.
-                  </p>
-                </div>
-              </div>
-
-              {/* 7-Day Date Picker Strip */}
-              <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {daysList.map((d) => {
-                  const isActive = d.iso === activeDateIso;
-                  return (
-                    <Link
-                      key={d.iso}
-                      href={`/doctor/${slug}?date=${d.iso}#slots`}
-                      className={`flex shrink-0 flex-col items-center justify-center rounded-2xl px-3.5 py-2 text-center transition min-w-[80px] ${
-                        isActive
-                          ? "border-2 border-ge-primary bg-ge-primary text-white shadow-xs"
-                          : "border border-ge-border bg-white text-ge-ink hover:border-ge-primary/50 hover:bg-ge-blue-tint/30"
-                      }`}
-                    >
-                      <span className={`text-[11px] font-medium ${isActive ? "text-white/85" : "text-ge-muted"}`}>
-                        {d.dayName}
-                      </span>
-                      <span className="text-[13px] font-bold">
-                        {d.dateFormatted}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7">
-              {slotPills.map((s) => {
-                if (s.isOpen && s.slotId) {
-                  return (
-                    <Link
-                      key={s.timeLabel}
-                      href={`/doctor/${slug}/book?slot=${s.slotId}`}
-                      className="group flex flex-col items-center justify-center rounded-2xl border border-ge-primary/30 bg-ge-blue-tint/40 p-2.5 text-center transition hover:border-ge-primary hover:bg-ge-primary hover:text-white"
-                    >
-                      <span className="text-[12.5px] font-semibold text-ge-ink group-hover:text-white">
-                        {s.timeLabel}
-                      </span>
-                      <span className="mt-0.5 text-[10px] font-medium text-ge-primary group-hover:text-white/90">
-                        Available
-                      </span>
-                    </Link>
-                  );
-                }
-
-                if (s.isBooked) {
-                  return (
-                    <div
-                      key={s.timeLabel}
-                      title="This slot is already booked by another patient"
-                      className="flex flex-col items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 p-2.5 text-center cursor-not-allowed opacity-80"
-                    >
-                      <span className="text-[12px] font-medium text-rose-700/80 line-through">
-                        {s.timeLabel}
-                      </span>
-                      <span className="mt-0.5 text-[10px] font-bold text-rose-600">
-                        Booked
-                      </span>
-                    </div>
-                  );
-                }
-
-                if (s.isBlocked) {
-                  return (
-                    <div
-                      key={s.timeLabel}
-                      title="Doctor is unavailable at this time"
-                      className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100/80 p-2.5 text-center cursor-not-allowed opacity-75"
-                    >
-                      <span className="text-[12px] font-medium text-neutral-500">
-                        {s.timeLabel}
-                      </span>
-                      <span className="mt-0.5 text-[10px] text-neutral-400">
-                        Unavailable
-                      </span>
-                    </div>
-                  );
-                }
-
-                // Past slot
-                return (
-                  <div
-                    key={s.timeLabel}
-                    title="This time has passed"
-                    className="flex flex-col items-center justify-center rounded-2xl border border-neutral-100 bg-neutral-50/60 p-2.5 text-center cursor-not-allowed opacity-40"
-                  >
-                    <span className="text-[12px] font-medium text-neutral-400">
-                      {s.timeLabel}
-                    </span>
-                    <span className="mt-0.5 text-[10px] text-neutral-400">
-                      Passed
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Interactive Calendar & Slots Section */}
+          <Card id="slots" className="rounded-3xl p-4 sm:p-6 scroll-mt-24 w-full max-w-full min-w-0">
+            <DoctorCalendarSlots
+              doctorSlug={slug}
+              todayIso={todayIso}
+              activeDateIso={activeDateIso}
+              slotPills={slotPills.map((s) => ({
+                ...s,
+                startsAt: s.startsAt.toISOString(),
+              }))}
+            />
           </Card>
 
           {/* About */}

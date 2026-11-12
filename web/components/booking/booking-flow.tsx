@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, ArrowRight, Building, Check, Landmark, Lock, Stethoscope, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building, Check, Landmark, Lock, Stethoscope, Video, Calendar as CalendarIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -88,7 +88,7 @@ export function BookingFlow({
   }
 
   return (
-    <div className="w-full min-w-0">
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
       {/* Mobile Stepper: compact and 100% responsive, never overflows */}
       <div className="mb-4 sm:hidden flex items-center justify-between rounded-2xl bg-white border border-ge-border px-3.5 py-2.5 text-[12.5px]">
         <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export function BookingFlow({
         ))}
       </ol>
 
-      <Card className="rounded-3xl p-4 sm:p-6 md:p-7 w-full max-w-full min-w-0">
+      <Card className="rounded-3xl p-4 sm:p-6 md:p-7 w-full max-w-full min-w-0 overflow-hidden">
         {step === 0 && (
           <ChooseMode
             mode={mode}
@@ -280,13 +280,39 @@ function ChooseSlot({
 
   return (
     <div>
-      <h2 className="ge-display text-[22px] font-semibold text-ge-navy">Pick a date and time</h2>
-      <p className="mt-1 text-[13px] text-ge-muted">Live availability for {doctorName} · standard 10:00 AM – 5:00 PM (20-min slots).</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="ge-display text-[20px] sm:text-[22px] font-semibold text-ge-navy">Pick a date and time</h2>
+          <p className="mt-0.5 text-[12.5px] text-ge-muted">Live availability for {doctorName} · 20-min slots.</p>
+        </div>
+
+        {/* Calendar Picker Shortcut */}
+        <label className="flex items-center gap-1.5 rounded-xl border border-ge-border bg-white px-3 py-1.5 text-[12px] font-medium text-ge-ink hover:border-ge-primary cursor-pointer shadow-2xs">
+          <CalendarIcon className="h-3.5 w-3.5 text-ge-primary" />
+          <span>Calendar:</span>
+          <input
+            type="date"
+            onChange={(e) => {
+              const val = e.target.value;
+              if (!val) return;
+              const foundIdx = grouped.findIndex((g) => {
+                const firstSlot = g.slots[0];
+                return firstSlot && firstSlot.startsAt.startsWith(val);
+              });
+              if (foundIdx !== -1) {
+                setSelectedDayIndex(foundIdx);
+              }
+            }}
+            className="text-[12px] font-semibold text-ge-primary bg-transparent focus:outline-none cursor-pointer"
+          />
+        </label>
+      </div>
+
       {grouped.length === 0 ? (
         <p className="mt-5 text-sm text-ge-muted">No upcoming slots. Please check back tomorrow.</p>
       ) : (
         <div className="mt-5 space-y-5">
-          {/* 7-Day Horizontal Selector */}
+          {/* Day Selector Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             {grouped.map((g, idx) => {
               const isActive = idx === selectedDayIndex;
@@ -295,7 +321,7 @@ function ChooseSlot({
                   type="button"
                   key={g.day}
                   onClick={() => setSelectedDayIndex(idx)}
-                  className={`flex shrink-0 items-center justify-center rounded-2xl px-4 py-2 text-center text-[12.5px] font-semibold transition min-w-[90px] ${
+                  className={`flex shrink-0 items-center justify-center rounded-2xl px-3.5 py-1.5 text-center text-[12.5px] font-semibold transition min-w-[85px] ${
                     isActive
                       ? "border-2 border-ge-primary bg-ge-primary text-white shadow-xs"
                       : "border border-ge-border bg-white text-ge-ink hover:border-ge-primary/50 hover:bg-ge-blue-tint/30"
