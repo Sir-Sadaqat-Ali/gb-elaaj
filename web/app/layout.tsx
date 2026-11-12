@@ -4,7 +4,6 @@ import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
-import { PwaRegistrar } from "@/components/pwa/pwa-registrar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 // Display face: Poppins (Curenast-matched). Keep the `--font-fraunces` var name
@@ -43,7 +42,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <QueryProvider>
             {children}
             <ToastProvider />
-            <PwaRegistrar />
           </QueryProvider>
         </SessionProvider>
       </body>
