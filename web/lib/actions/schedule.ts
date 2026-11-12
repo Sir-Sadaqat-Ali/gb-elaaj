@@ -94,3 +94,47 @@ export async function blockSlotAction(input: { slotId: string }): Promise<Action
   revalidatePath("/doctor/schedule");
   return { ok: true };
 }
+
+export async function toggleDayOffAction(input: {
+  dateIso: string;
+  markOff: boolean;
+}): Promise<ActionResult<{ updated: number }>> {
+  const session = await auth();
+  if (!session?.user || session.user.role !== Role.DOCTOR) {
+    return { ok: false, error: "Only doctors can update their leave." };
+  }
+  const doctor = await prisma.doctorProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+  if (!doctor) return { ok: false, error: "Doctor profile not found." };
+
+  const [y, m, d] = input.dateIso.split("-").map(Number);
+  // UTC bounds covering the full day in PKT (UTC+5)
+  const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+
+  const res = await prisma.doctorAvailability.updateMany({
+    where: {
+      doctorId: doctor.id,
+      startsAt: { gte: startOfDay, lte: endOfDay },
+      status: input.markOff ? SlotStatus.OPEN : SlotStatus.BLOCKED,
+    },
+    data: {
+      status: input.markOff ? SlotStatus.BLOCKED : SlotStatus.OPEN,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: session.user.id,
+      action: input.markOff ? "schedule.day_off_marked" : "schedule.day_off_cleared",
+      targetType: "DoctorProfile",
+      targetId: doctor.id,
+      meta: { dateIso: input.dateIso, updated: res.count },
+    },
+  });
+
+  revalidatePath("/doctor/schedule");
+  revalidatePath("/doctors");
+  return { ok: true, data: { updated: res.count } };
+}

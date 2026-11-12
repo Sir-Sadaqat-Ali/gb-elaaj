@@ -6,10 +6,10 @@ import { DOCTOR_NAV } from "@/app/(doctor)/doctor/_nav";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/data/confirm-button";
-import { blockSlotAction } from "@/lib/actions/schedule";
+import { blockSlotAction, toggleDayOffAction } from "@/lib/actions/schedule";
 import { ensureDoctorDaySlots } from "@/lib/slots";
 import { formatDate, formatTime, formatPktDateIso } from "@/lib/formatting";
-import { Video, Building, Lock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Video, Building, Lock, CheckCircle2, ChevronLeft, ChevronRight, Palmtree } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Schedule" };
@@ -70,6 +70,7 @@ export default async function DoctorSchedulePage({
   const totalOpen = slots.filter((s) => s.status === "OPEN").length;
   const totalBlocked = slots.filter((s) => s.status === "BLOCKED").length;
   const totalBooked = slots.filter((s) => s.status === "BOOKED").length;
+  const isFullDayOff = totalOpen === 0 && totalBlocked > 0;
 
   return (
     <AppShell
@@ -145,18 +146,56 @@ export default async function DoctorSchedulePage({
             })}
           </div>
 
-          {/* Quick Summary Pill Bar */}
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px]">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 border border-emerald-200">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {totalOpen} Active Slots
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 font-medium text-neutral-700 border border-neutral-300">
-              <Lock className="h-3.5 w-3.5" /> {totalBlocked} Blocked
-            </span>
-            {totalBooked > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-medium text-ge-primary border border-blue-200">
-                ● {totalBooked} Booked
+          {/* Day Off Banner if whole day is blocked */}
+          {isFullDayOff && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                  <Palmtree className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-[13.5px] font-bold text-amber-900">Marked as Day Off (چھٹی / Vacation)</h4>
+                  <p className="text-[12px] text-amber-700">All available slots for this date are blocked. Patients cannot book you on this day.</p>
+                </div>
+              </div>
+              <ConfirmButton
+                action={toggleDayOffAction}
+                arg={{ dateIso: activeDateIso, markOff: false }}
+                label="✅ Resume Working Day (چھٹی ختم کریں)"
+                variant="primary"
+                successMsg="Slots are now open for patient bookings."
+                className="h-9 px-4 text-[12px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+              />
+            </div>
+          )}
+
+          {/* Quick Summary Pill Bar & Action Button */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[12px]">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="h-3.5 w-3.5" /> {totalOpen} Active Slots
               </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 font-medium text-neutral-700 border border-neutral-300">
+                <Lock className="h-3.5 w-3.5" /> {totalBlocked} Blocked
+              </span>
+              {totalBooked > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-medium text-ge-primary border border-blue-200">
+                  ● {totalBooked} Booked
+                </span>
+              )}
+            </div>
+
+            {/* Quick 1-Click Day Off Action */}
+            {!isFullDayOff && totalOpen > 0 && (
+              <ConfirmButton
+                action={toggleDayOffAction}
+                arg={{ dateIso: activeDateIso, markOff: true }}
+                label="🌴 Mark Day Off (چھٹی)"
+                variant="ghost"
+                confirmText="Are you sure you want to mark this day as Day Off? All open slots will be blocked."
+                successMsg="Marked as Day Off. All open slots are now blocked."
+                className="h-8 px-3 text-[11.5px] font-semibold text-amber-700 border border-amber-300 hover:bg-amber-50"
+              />
             )}
           </div>
 

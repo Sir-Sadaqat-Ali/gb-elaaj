@@ -227,6 +227,16 @@ export function DoctorCalendarSlots({
           </span>
         </div>
 
+        {slotPills.filter((s) => s.isOpen).length === 0 && (
+          <div className="mt-3.5 flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3.5 text-[12.5px] text-amber-900">
+            <span className="text-lg">🌴</span>
+            <div>
+              <strong>Doctor is on leave or unavailable on this date.</strong>
+              <div className="text-[11.5px] text-amber-700">Please choose another date from the calendar above to view open slots.</div>
+            </div>
+          </div>
+        )}
+
         {/* 21 Slots Grid */}
         <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 w-full min-w-0">
           {slotPills.map((s) => {

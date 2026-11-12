@@ -22,10 +22,14 @@ export {
 } from "./policy";
 
 export function getStorageProvider(): StorageProvider {
-  const name = process.env.STORAGE_PROVIDER ?? "mock";
+  const name = (process.env.STORAGE_PROVIDER ?? "mock").toLowerCase().trim();
   switch (name) {
-    case "r2": return r2Storage;
+    case "r2":
+    case "s3":
+    case "aws":
+      return r2Storage;
     case "mock":
-    default:   return mockStorage;
+    default:
+      return mockStorage;
   }
 }
