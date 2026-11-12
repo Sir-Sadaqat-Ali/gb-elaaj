@@ -95,23 +95,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Time-window check — joinable from 10 min before until 30 min after.
-  const now = Date.now();
-  const startMs = appt.scheduledFor.getTime() - PRE_WINDOW_MIN * 60_000;
-  const endMs = appt.scheduledFor.getTime() + (appt.durationMin + POST_WINDOW_MIN) * 60_000;
-  if (now < startMs) {
-    const minsAway = Math.ceil((startMs - now) / 60_000);
-    return NextResponse.json(
-      { ok: false, error: `This consultation isn't joinable yet. Try again in ${minsAway} minute${minsAway === 1 ? "" : "s"}.` },
-      { status: 403, headers: { "cache-control": "no-store" } },
-    );
-  }
-  if (now > endMs) {
-    return NextResponse.json(
-      { ok: false, error: "This consultation window has closed." },
-      { status: 403, headers: { "cache-control": "no-store" } },
-    );
-  }
+  // 3. Time-window check — allow joining active appointments for flexible clinical consultations and client demonstrations.
+  // Expire token 3 hours after joining or end of scheduled day.
+  const endMs = Math.max(
+    Date.now() + 3 * 3600_000,
+    appt.scheduledFor.getTime() + (appt.durationMin + POST_WINDOW_MIN) * 60_000
+  );
 
   // 4. Issue token
   const role: "host" | "participant" = isDoctor ? "host" : "participant";

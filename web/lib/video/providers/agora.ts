@@ -21,9 +21,12 @@ export const agoraVideo: VideoProvider = {
     // Format: <role>-<userId>. Agora limits userAccount to 256 chars.
     const userAccount = `${role}-${userId}`;
 
-    // Convert ms→s for Agora; build a token good until the appointment window ends.
-    const expiresInSeconds = Math.max(60, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-    const privilegeExpireTs = Math.floor(expiresAt.getTime() / 1000);
+    // Convert ms→s for Agora; ensure token has minimum 3 hours (10,800s) validity from now
+    // so active consultations and test calls never disconnect or expire mid-session.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const targetExpireSec = Math.floor(expiresAt.getTime() / 1000);
+    const privilegeExpireTs = Math.max(nowSec + 10800, targetExpireSec + 3600);
+    const expiresInSeconds = privilegeExpireTs - nowSec;
 
     const token = RtcTokenBuilder.buildTokenWithUserAccount(
       env.AGORA_APP_ID,

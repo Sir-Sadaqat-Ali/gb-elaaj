@@ -6,10 +6,14 @@ import { agoraVideo } from "./providers/agora";
 export type { VideoProvider, VideoToken, GenerateTokenInput } from "./types";
 
 export function getVideoProvider(): VideoProvider {
-  switch (process.env.VIDEO_PROVIDER) {
-    case "agora": return agoraVideo;
-    case "daily": return dailyVideo;
+  const provider = (process.env.VIDEO_PROVIDER || "").toLowerCase().trim();
+  switch (provider) {
     case "mock":
-    default:      return mockVideo;
+      return mockVideo;
+    case "daily":
+      return dailyVideo;
+    case "agora":
+    default:
+      return agoraVideo;
   }
 }
