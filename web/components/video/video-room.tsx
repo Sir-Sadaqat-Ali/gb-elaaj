@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Mic, MicOff, Phone, Video, VideoOff, Loader2, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Phone, Video, VideoOff, Loader2, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -31,6 +31,8 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" });
   const [micOn, setMicOn] = React.useState(true);
   const [camOn, setCamOn] = React.useState(true);
+  const [audioAutoplayBlocked, setAudioAutoplayBlocked] = React.useState(false);
+  const [remoteSpeaking, setRemoteSpeaking] = React.useState(false);
   const localVideoRef = React.useRef<HTMLDivElement | null>(null);
   const remoteVideoRef = React.useRef<HTMLDivElement | null>(null);
   const clientRef = React.useRef<IAgoraRTCClient | null>(null);
@@ -132,6 +134,13 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
     try {
       const Agora = (await import("agora-rtc-sdk-ng")).default;
       agoraRef.current = Agora;
+
+      // Handle browser autoplay policy block globally
+      Agora.onAutoplayFailed = () => {
+        console.warn("[video] Agora onAutoplayFailed triggered. Showing unmute banner.");
+        setAudioAutoplayBlocked(true);
+      };
+
       const client = Agora.createClient({ mode: "rtc", codec: "vp8" });
       clientRef.current = client;
 
@@ -142,21 +151,51 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
           (user.videoTrack as IRemoteVideoTrack)?.play(remoteVideoRef.current);
         }
         if (mediaType === "audio") {
-          (user.audioTrack as IRemoteAudioTrack)?.play();
+          const audioTrack = user.audioTrack as IRemoteAudioTrack;
+          if (audioTrack) {
+            audioTrack.setVolume(100);
+            try {
+              audioTrack.play();
+            } catch (err) {
+              console.warn("[video] Remote audio play failed:", err);
+              setAudioAutoplayBlocked(true);
+            }
+          }
         }
         setPhase((p) => (p.kind === "in-call" ? { ...p, remoteJoined: true } : p));
       });
-      client.on("user-unpublished", () => {
-        setPhase((p) => (p.kind === "in-call" ? { ...p, remoteJoined: false } : p));
+
+      client.on("user-unpublished", (user, mediaType) => {
+        if (mediaType === "video") {
+          setPhase((p) => (p.kind === "in-call" ? { ...p, remoteJoined: false } : p));
+        }
       });
       client.on("user-left", () => {
         setPhase((p) => (p.kind === "in-call" ? { ...p, remoteJoined: false } : p));
       });
 
+      // Volume indicator to visually verify speech/audio transmission
+      client.enableAudioVolumeIndicator();
+      client.on("volume-indicator", (volumes) => {
+        const hasSpeaking = volumes.some((v) => v.level > 10);
+        setRemoteSpeaking(hasSpeaking);
+      });
+
       await client.join(phase.appId, phase.channel, phase.token, phase.uid);
 
-      const mic = await Agora.createMicrophoneAudioTrack();
-      const cam = await Agora.createCameraVideoTrack();
+      // Create mic with echo cancellation, noise suppression, and auto gain control
+      const mic = await Agora.createMicrophoneAudioTrack({
+        encoderConfig: "speech_standard",
+        AEC: true,
+        ANS: true,
+        AGC: true,
+      });
+      mic.setVolume(100);
+
+      const cam = await Agora.createCameraVideoTrack({
+        encoderConfig: "720p_1",
+      });
+
       localAudioRef.current = mic;
       localVideoTrackRef.current = cam;
       if (localVideoRef.current) cam.play(localVideoRef.current);
@@ -252,7 +291,7 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   }, []);
 
   // ── Toggle mic ──────────────────────────────────────────────
-  function toggleMic() {
+  async function toggleMic() {
     if (mockStreamRef.current) {
       const next = !micOn;
       mockStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = next));
@@ -261,10 +300,35 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
     }
     if (localAudioRef.current) {
       const next = !micOn;
-      void localAudioRef.current.setEnabled(next);
-      setMicOn(next);
+      try {
+        await localAudioRef.current.setMuted(!next);
+        setMicOn(next);
+      } catch (e) {
+        console.warn("[video] toggleMic error:", e);
+      }
     }
   }
+
+  const resumeAudio = React.useCallback(async () => {
+    try {
+      if (clientRef.current) {
+        for (const user of clientRef.current.remoteUsers) {
+          if (user.audioTrack) {
+            user.audioTrack.setVolume(100);
+            try {
+              user.audioTrack.play();
+            } catch (err) {
+              console.warn("[video] resume play error:", err);
+            }
+          }
+        }
+      }
+      setAudioAutoplayBlocked(false);
+    } catch (e) {
+      console.warn("[video] resumeAudio error:", e);
+    }
+  }, []);
+
   function toggleCam() {
     if (mockStreamRef.current) {
       const next = !camOn;
@@ -299,8 +363,28 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
   return (
     <div className="space-y-3">
       {/* Remote video — main stage */}
-      <div className="relative aspect-[16/9] overflow-hidden rounded-lg" style={{ background: "linear-gradient(135deg,#062A4F 0%,#0B84FE 100%)" }}>
+      <div
+        onClick={resumeAudio}
+        className="relative aspect-[16/9] overflow-hidden rounded-lg cursor-pointer"
+        style={{ background: "linear-gradient(135deg,#062A4F 0%,#0B84FE 100%)" }}
+      >
         <div ref={remoteVideoRef} className="absolute inset-0" />
+
+        {/* Autoplay block alert banner */}
+        {audioAutoplayBlocked && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              void resumeAudio();
+            }}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-white shadow-lg animate-bounce"
+          >
+            <VolumeX className="h-4 w-4" />
+            <span className="text-[12px] font-bold">Audio blocked by browser. Click to enable sound 🔊</span>
+          </button>
+        )}
+
         {phase.kind === "in-call" && !phase.remoteJoined && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
             <Avatar src={fallbackPeerImage ?? null} name={phase.remoteName} size={88} className="bg-white/15" />
@@ -311,6 +395,11 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
         <span className="absolute left-3 top-3 rounded-full bg-black/40 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
           <span className="mr-1 text-[color:var(--ge-success)]">●</span>
           {phase.kind === "in-call" ? (phase.remoteJoined ? "Live" : phase.isMock ? "Demo consultation" : "Connected · waiting") : "Joining…"}
+          {remoteSpeaking && (
+            <span className="ml-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9.5px] font-bold text-white">
+              Speaking 🎙️
+            </span>
+          )}
         </span>
 
         {/* Local video PiP */}
@@ -319,7 +408,7 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
         </div>
 
         {/* Controls */}
-        <div className="absolute bottom-3 left-3 flex gap-2">
+        <div className="absolute bottom-3 left-3 flex gap-2 z-20">
           {phase.kind === "ready" ? (
             <Button onClick={join} className="bg-ge-success hover:bg-ge-success/90">
               <Phone className="h-4 w-4" /> Join now
@@ -328,7 +417,10 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
             <>
               <button
                 type="button"
-                onClick={toggleMic}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void toggleMic();
+                }}
                 aria-pressed={!micOn}
                 aria-label={micOn ? "Mute mic" : "Unmute mic"}
                 className={`flex h-9 w-9 items-center justify-center rounded-full backdrop-blur ${micOn ? "bg-white/15 text-white" : "bg-ge-danger text-white"}`}
@@ -337,7 +429,10 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
               </button>
               <button
                 type="button"
-                onClick={toggleCam}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleCam();
+                }}
                 aria-pressed={!camOn}
                 aria-label={camOn ? "Turn off camera" : "Turn on camera"}
                 className={`flex h-9 w-9 items-center justify-center rounded-full backdrop-blur ${camOn ? "bg-white/15 text-white" : "bg-ge-danger text-white"}`}
@@ -346,7 +441,22 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
               </button>
               <button
                 type="button"
-                onClick={leave}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void resumeAudio();
+                }}
+                aria-label="Unmute audio"
+                title="Click to unmute sound"
+                className="flex h-9 w-9 items-center justify-center rounded-full backdrop-blur bg-white/15 text-white hover:bg-white/25 transition"
+              >
+                <Volume2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void leave();
+                }}
                 aria-label="Leave call"
                 className="flex h-9 items-center gap-1.5 rounded-full bg-ge-danger px-3 text-white"
               >
@@ -365,7 +475,7 @@ export function VideoRoom({ appointmentId, fallbackPeerName, fallbackPeerImage }
 
       <p className="text-[11.5px] text-ge-muted">
         Channel <code className="ge-mono">{phase.kind === "ready" || phase.kind === "in-call" ? "active" : "—"}</code> ·
-        {phase.kind === "in-call" && phase.isMock ? " Local Media Stream" : " End-to-end via Agora"} · Token expires at end of appointment window.
+        {phase.kind === "in-call" && phase.isMock ? " Local Media Stream" : " End-to-end via Agora (Stereo Audio · Echo Cancellation)"} · Token expires at end of appointment window.
       </p>
     </div>
   );
