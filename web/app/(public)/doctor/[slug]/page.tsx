@@ -13,7 +13,7 @@ import { IconTile } from "@/components/marketing/bits";
 import { StickyBookBar } from "@/components/booking/sticky-book-bar";
 import { DoctorCalendarSlots } from "@/components/booking/doctor-calendar-slots";
 import { formatPkr, formatTime, formatDate, maskLicense, formatPktDateIso } from "@/lib/formatting";
-import { ensureDoctorDaySlots, DAILY_SLOT_TIMES, getPktHour } from "@/lib/slots";
+import { ensureDoctorDaySlots, TWENTY_FOUR_HOUR_SLOT_TIMES, getDoctorShift, getPktHour, getPktMinute } from "@/lib/slots";
 
 export const revalidate = 60;
 
@@ -83,15 +83,16 @@ export default async function DoctorProfilePage({
     daysList.push({ iso, dayName, dateFormatted, isToday: i === 0 });
   }
 
-  // If after 5 PM PKT, today's operating hours have ended; default to tomorrow
-  const isPastTodayOperatingHours = getPktHour(now) >= 17;
+  // Real-time 24-hour availability in Pakistan Time:
+  // Today remains active throughout 24 hours. If past 23:40 PKT, default to tomorrow.
+  const isPastTodayOperatingHours = getPktHour(now) === 23 && getPktMinute(now) >= 40;
   const defaultDateIso = isPastTodayOperatingHours ? daysList[1]!.iso : todayIso;
   const activeDateIso = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : defaultDateIso;
 
   const [ay, am, ad] = activeDateIso.split("-").map(Number);
   const activeDate = new Date(Date.UTC(ay, am - 1, ad, 5, 0, 0, 0));
 
-  // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
+  // Ensure standard 24-Hour (20-min) slots exist for this ONE day
   const daySlots = await ensureDoctorDaySlots(doctor.id, activeDateIso);
 
   const activeDayObj = daysList.find((d) => d.iso === activeDateIso) ?? {
@@ -99,8 +100,10 @@ export default async function DoctorProfilePage({
     dateFormatted: formatDate(activeDate, { day: "numeric", month: "short" }),
   };
 
-  // Aggregate standard 21 slots for the active day without duplicates
-  const slotPills = DAILY_SLOT_TIMES.map(({ hour, minute }) => {
+  const doctorShift = getDoctorShift(doctor.id);
+
+  // Aggregate standard 72 slots (24 hours) for the active day without duplicates
+  const slotPills = TWENTY_FOUR_HOUR_SLOT_TIMES.map(({ hour, minute, shift }) => {
     const startsAt = new Date(Date.UTC(ay, am - 1, ad, hour - 5, minute, 0, 0));
     const matching = daySlots.filter((s) => s.startsAt.getTime() === startsAt.getTime());
     const isPast = startsAt.getTime() < Date.now();
@@ -118,6 +121,7 @@ export default async function DoctorProfilePage({
       isBlocked,
       isOpen,
       slotId: openSlot?.id ?? null,
+      shift,
     };
   });
 
@@ -230,6 +234,7 @@ export default async function DoctorProfilePage({
               doctorSlug={slug}
               todayIso={todayIso}
               activeDateIso={activeDateIso}
+              doctorShift={doctorShift}
               slotPills={slotPills.map((s) => ({
                 ...s,
                 startsAt: s.startsAt.toISOString(),

@@ -3,8 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Sun, Moon, Sunset, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+export type ShiftCategory = "MORNING" | "EVENING" | "NIGHT";
 
 export type SlotPill = {
   startsAt: string;
@@ -14,6 +16,7 @@ export type SlotPill = {
   isBlocked: boolean;
   isOpen: boolean;
   slotId: string | null;
+  shift: ShiftCategory;
 };
 
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -22,21 +25,55 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+export const SHIFT_CONFIG = {
+  ALL: {
+    key: "ALL",
+    labelEn: "All Shifts",
+    labelUr: "تمام شفٹیں",
+    emoji: "⚡",
+    timeRange: "24 Hours Coverage",
+  },
+  MORNING: {
+    key: "MORNING",
+    labelEn: "Morning",
+    labelUr: "صبح",
+    emoji: "🌅",
+    timeRange: "08:00 AM – 04:00 PM",
+  },
+  EVENING: {
+    key: "EVENING",
+    labelEn: "Evening",
+    labelUr: "شام",
+    emoji: "🌆",
+    timeRange: "04:00 PM – 12:00 AM",
+  },
+  NIGHT: {
+    key: "NIGHT",
+    labelEn: "Night",
+    labelUr: "رات",
+    emoji: "🌙",
+    timeRange: "12:00 AM – 08:00 AM",
+  },
+} as const;
+
 export function DoctorCalendarSlots({
   doctorSlug,
   todayIso,
   activeDateIso,
   slotPills,
+  doctorShift,
 }: {
   doctorSlug: string;
   todayIso: string;
   activeDateIso: string;
   slotPills: SlotPill[];
+  doctorShift?: ShiftCategory;
 }) {
   const router = useRouter();
   const [ay, am, ad] = activeDateIso.split("-").map(Number);
   const [viewYear, setViewYear] = React.useState(ay);
   const [viewMonth, setViewMonth] = React.useState(am - 1); // 0-indexed
+  const [selectedShift, setSelectedShift] = React.useState<"ALL" | ShiftCategory>("ALL");
 
   // Format selected date nicely
   const selectedDateObj = new Date(Date.UTC(ay, am - 1, ad, 5, 0, 0, 0));
@@ -75,17 +112,35 @@ export function DoctorCalendarSlots({
     router.push(`/doctor/${doctorSlug}?date=${dateStr}#slots`);
   }
 
+  // Shift counts
+  const morningSlots = slotPills.filter((s) => s.shift === "MORNING");
+  const eveningSlots = slotPills.filter((s) => s.shift === "EVENING");
+  const nightSlots = slotPills.filter((s) => s.shift === "NIGHT");
+
+  const openMorningCount = morningSlots.filter((s) => s.isOpen).length;
+  const openEveningCount = eveningSlots.filter((s) => s.isOpen).length;
+  const openNightCount = nightSlots.filter((s) => s.isOpen).length;
+  const openTotalCount = slotPills.filter((s) => s.isOpen).length;
+
+  const filteredSlots =
+    selectedShift === "ALL"
+      ? slotPills
+      : slotPills.filter((s) => s.shift === selectedShift);
+
   return (
     <div className="w-full min-w-0 max-w-full">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ge-border pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-[17px] font-bold text-ge-ink">Doctor Availability Calendar</h2>
-            <Badge variant="success">Live</Badge>
+            <h2 className="text-[17px] font-bold text-ge-ink">24-Hour Availability Calendar</h2>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              24/7 Coverage
+            </span>
           </div>
           <p className="mt-1 text-[12.5px] text-ge-muted">
-            Select any date from the calendar below to view all 20-min slots (10:00 AM – 5:00 PM).
+            Round-the-clock doctor care divided into 3 shifts: Morning (صبح), Evening (شام), and Night (رات).
           </p>
         </div>
 
@@ -215,21 +270,112 @@ export function DoctorCalendarSlots({
       <div className="mt-6 rounded-2xl border border-ge-border bg-ge-soft-bg/40 p-4 sm:p-5 w-full max-w-full min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ge-border pb-3">
           <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ge-primary">
-              Available Timings
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ge-primary">
+                Available Shifts & Timings
+              </span>
+              {doctorShift && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10.5px] font-bold text-ge-primary">
+                  Rotation: {SHIFT_CONFIG[doctorShift].emoji} {SHIFT_CONFIG[doctorShift].labelEn} ({SHIFT_CONFIG[doctorShift].labelUr})
+                </span>
+              )}
+            </div>
             <h3 className="text-[16px] font-bold text-ge-ink">
               {activeDateIso === todayIso ? "Today" : selectedDateLabel.split(",")[0]} · {selectedDateLabel}
             </h3>
           </div>
-          <span className="text-[12px] text-ge-muted">
-            {slotPills.filter((s) => s.isOpen).length} slots available
+          <span className="text-[12px] font-medium text-ge-muted">
+            <strong className="text-emerald-700">{openTotalCount}</strong> of {slotPills.length} slots active
           </span>
         </div>
 
-        {slotPills.filter((s) => s.isOpen).length === 0 && (
-          <div className="mt-3.5 flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3.5 text-[12.5px] text-amber-900">
-            <span className="text-lg">🌴</span>
+        {/* 3 Shifts Filter Tabs with Urdu & English Labels */}
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* ALL SHIFTS */}
+          <button
+            type="button"
+            onClick={() => setSelectedShift("ALL")}
+            className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 text-center transition ${
+              selectedShift === "ALL"
+                ? "border-ge-primary bg-ge-primary text-white shadow-xs"
+                : "border-ge-border bg-white text-ge-ink hover:border-ge-primary/40 hover:bg-ge-blue-tint/20"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-bold">
+              <span>⚡</span>
+              <span>All Shifts</span>
+              <span className="text-[11px] opacity-80">(تمام)</span>
+            </div>
+            <div className={`mt-0.5 text-[10.5px] ${selectedShift === "ALL" ? "text-white/80" : "text-ge-muted"}`}>
+              {openTotalCount} active · 24h
+            </div>
+          </button>
+
+          {/* MORNING SHIFT */}
+          <button
+            type="button"
+            onClick={() => setSelectedShift("MORNING")}
+            className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 text-center transition ${
+              selectedShift === "MORNING"
+                ? "border-amber-500 bg-amber-500 text-white shadow-xs"
+                : "border-ge-border bg-white text-ge-ink hover:border-amber-400 hover:bg-amber-50/50"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-bold">
+              <span>🌅</span>
+              <span>Morning</span>
+              <span className="text-[11px] opacity-80">(صبح)</span>
+            </div>
+            <div className={`mt-0.5 text-[10.5px] ${selectedShift === "MORNING" ? "text-white/90" : "text-amber-800"}`}>
+              {openMorningCount} active · 08 AM–04 PM
+            </div>
+          </button>
+
+          {/* EVENING SHIFT */}
+          <button
+            type="button"
+            onClick={() => setSelectedShift("EVENING")}
+            className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 text-center transition ${
+              selectedShift === "EVENING"
+                ? "border-indigo-600 bg-indigo-600 text-white shadow-xs"
+                : "border-ge-border bg-white text-ge-ink hover:border-indigo-400 hover:bg-indigo-50/50"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-bold">
+              <span>🌆</span>
+              <span>Evening</span>
+              <span className="text-[11px] opacity-80">(شام)</span>
+            </div>
+            <div className={`mt-0.5 text-[10.5px] ${selectedShift === "EVENING" ? "text-white/90" : "text-indigo-800"}`}>
+              {openEveningCount} active · 04 PM–12 AM
+            </div>
+          </button>
+
+          {/* NIGHT SHIFT */}
+          <button
+            type="button"
+            onClick={() => setSelectedShift("NIGHT")}
+            className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 text-center transition ${
+              selectedShift === "NIGHT"
+                ? "border-purple-600 bg-purple-600 text-white shadow-xs"
+                : "border-ge-border bg-white text-ge-ink hover:border-purple-400 hover:bg-purple-50/50"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-bold">
+              <span>🌙</span>
+              <span>Night</span>
+              <span className="text-[11px] opacity-80">(رات)</span>
+            </div>
+            <div className={`mt-0.5 text-[10.5px] ${selectedShift === "NIGHT" ? "text-white/90" : "text-purple-800"}`}>
+              {openNightCount} active · 12 AM–08 AM
+            </div>
+          </button>
+        </div>
+
+        {/* Doctor Day Off or Shift Handover Notice */}
+        {openTotalCount === 0 && (
+          <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3.5 text-[12.5px] text-amber-900">
+            <span className="text-xl">🌴</span>
             <div>
               <strong>Doctor is on leave or unavailable on this date.</strong>
               <div className="text-[11.5px] text-amber-700">Please choose another date from the calendar above to view open slots.</div>
@@ -237,20 +383,43 @@ export function DoctorCalendarSlots({
           </div>
         )}
 
-        {/* 21 Slots Grid */}
-        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 w-full min-w-0">
-          {slotPills.map((s) => {
+        {selectedShift !== "ALL" && filteredSlots.filter((s) => s.isOpen).length === 0 && openTotalCount > 0 && (
+          <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-blue-200 bg-blue-50/80 p-3.5 text-[12.5px] text-blue-900">
+            <span className="text-xl">🔄</span>
+            <div>
+              <strong>Doctor is off-duty during {SHIFT_CONFIG[selectedShift].labelEn} Shift ({SHIFT_CONFIG[selectedShift].labelUr}).</strong>
+              <div className="text-[11.5px] text-blue-700">
+                Gb Elaaj rotates doctors across 24 hours. This doctor is active during their primary shift ({doctorShift ? SHIFT_CONFIG[doctorShift].labelEn : "Morning"}). Select &quot;All Shifts&quot; above to view available consultation slots.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Slots Grid */}
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full min-w-0">
+          {filteredSlots.map((s) => {
+            const shiftBadge =
+              s.shift === "MORNING"
+                ? { emoji: "🌅", label: "Morning", color: "text-amber-700 bg-amber-50" }
+                : s.shift === "EVENING"
+                ? { emoji: "🌆", label: "Evening", color: "text-indigo-700 bg-indigo-50" }
+                : { emoji: "🌙", label: "Night", color: "text-purple-700 bg-purple-50" };
+
             if (s.isOpen && s.slotId) {
               return (
                 <Link
-                  key={s.timeLabel}
+                  key={`${s.shift}-${s.timeLabel}`}
                   href={`/doctor/${doctorSlug}/book?slot=${s.slotId}`}
                   className="group flex flex-col items-center justify-center rounded-2xl border border-ge-primary/30 bg-white p-2.5 text-center transition hover:border-ge-primary hover:bg-ge-primary hover:text-white shadow-2xs"
                 >
-                  <span className="text-[12.5px] font-semibold text-ge-ink group-hover:text-white">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold opacity-75 group-hover:text-white/90">
+                    <span>{shiftBadge.emoji}</span>
+                    <span>{shiftBadge.label}</span>
+                  </div>
+                  <span className="mt-0.5 text-[13px] font-bold text-ge-ink group-hover:text-white">
                     {s.timeLabel}
                   </span>
-                  <span className="mt-0.5 text-[10px] font-medium text-ge-primary group-hover:text-white/90">
+                  <span className="mt-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 group-hover:bg-white/20 group-hover:text-white">
                     Available
                   </span>
                 </Link>
@@ -260,14 +429,18 @@ export function DoctorCalendarSlots({
             if (s.isBooked) {
               return (
                 <div
-                  key={s.timeLabel}
+                  key={`${s.shift}-${s.timeLabel}`}
                   title="This slot is already booked by another patient"
                   className="flex flex-col items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/70 p-2.5 text-center cursor-not-allowed opacity-80"
                 >
-                  <span className="text-[12px] font-medium text-rose-700/80 line-through">
+                  <div className="flex items-center gap-1 text-[10px] text-rose-500">
+                    <span>{shiftBadge.emoji}</span>
+                    <span>{shiftBadge.label}</span>
+                  </div>
+                  <span className="mt-0.5 text-[12.5px] font-medium text-rose-700/80 line-through">
                     {s.timeLabel}
                   </span>
-                  <span className="mt-0.5 text-[10px] font-bold text-rose-600">
+                  <span className="mt-1 text-[10px] font-bold text-rose-600">
                     Booked
                   </span>
                 </div>
@@ -277,15 +450,19 @@ export function DoctorCalendarSlots({
             if (s.isBlocked) {
               return (
                 <div
-                  key={s.timeLabel}
-                  title="Doctor is unavailable at this time"
-                  className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100/80 p-2.5 text-center cursor-not-allowed opacity-75"
+                  key={`${s.shift}-${s.timeLabel}`}
+                  title="Doctor is off-duty in this shift (Coverage handed over to rotation doctor)"
+                  className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100/70 p-2.5 text-center cursor-not-allowed opacity-75"
                 >
-                  <span className="text-[12px] font-medium text-neutral-500">
+                  <div className="flex items-center gap-1 text-[10px] text-neutral-400">
+                    <span>{shiftBadge.emoji}</span>
+                    <span>{shiftBadge.label}</span>
+                  </div>
+                  <span className="mt-0.5 text-[12px] font-medium text-neutral-500">
                     {s.timeLabel}
                   </span>
-                  <span className="mt-0.5 text-[10px] text-neutral-400">
-                    Unavailable
+                  <span className="mt-1 text-[10px] text-neutral-400 font-medium">
+                    Off Duty
                   </span>
                 </div>
               );
@@ -294,14 +471,18 @@ export function DoctorCalendarSlots({
             // Past slot
             return (
               <div
-                key={s.timeLabel}
+                key={`${s.shift}-${s.timeLabel}`}
                 title="This time has passed"
                 className="flex flex-col items-center justify-center rounded-2xl border border-neutral-100 bg-neutral-50/60 p-2.5 text-center cursor-not-allowed opacity-40"
               >
-                <span className="text-[12px] font-medium text-neutral-400">
+                <div className="flex items-center gap-1 text-[10px] text-neutral-300">
+                  <span>{shiftBadge.emoji}</span>
+                  <span>{shiftBadge.label}</span>
+                </div>
+                <span className="mt-0.5 text-[12px] font-medium text-neutral-400">
                   {s.timeLabel}
                 </span>
-                <span className="mt-0.5 text-[10px] text-neutral-400">
+                <span className="mt-1 text-[10px] text-neutral-400">
                   Passed
                 </span>
               </div>

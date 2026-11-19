@@ -2,33 +2,98 @@ import { prisma } from "@/lib/db";
 import { ConsultMode, SlotStatus } from "@prisma/client";
 import { formatPktDateIso } from "@/lib/formatting";
 
+export type ShiftCategory = "MORNING" | "EVENING" | "NIGHT";
+
+export interface ShiftMeta {
+  key: ShiftCategory;
+  nameEn: string;
+  nameUr: string;
+  badge: string;
+  emoji: string;
+  timeRange: string;
+  startHour: number; // inclusive
+  endHour: number;   // exclusive
+}
+
+export const SHIFT_DETAILS: Record<ShiftCategory, ShiftMeta> = {
+  MORNING: {
+    key: "MORNING",
+    nameEn: "Morning Shift",
+    nameUr: "صبح کی شفٹ",
+    badge: "Morning",
+    emoji: "🌅",
+    timeRange: "08:00 AM – 04:00 PM",
+    startHour: 8,
+    endHour: 16,
+  },
+  EVENING: {
+    key: "EVENING",
+    nameEn: "Evening Shift",
+    nameUr: "شام کی شفٹ",
+    badge: "Evening",
+    emoji: "🌆",
+    timeRange: "04:00 PM – 12:00 AM",
+    startHour: 16,
+    endHour: 24,
+  },
+  NIGHT: {
+    key: "NIGHT",
+    nameEn: "Night Shift",
+    nameUr: "رات کی شفٹ",
+    badge: "Night",
+    emoji: "🌙",
+    timeRange: "12:00 AM – 08:00 AM",
+    startHour: 0,
+    endHour: 8,
+  },
+};
+
 /**
- * Standard fixed daily operating hours:
- * 10:00 AM to 5:00 PM in exact 20-minute intervals (21 slots total).
+ * Classifies an hour (0-23 in Pakistan Standard Time) into Morning, Evening, or Night shift.
  */
-export const DAILY_SLOT_TIMES: { hour: number; minute: number }[] = [
-  { hour: 10, minute: 0 },
-  { hour: 10, minute: 20 },
-  { hour: 10, minute: 40 },
-  { hour: 11, minute: 0 },
-  { hour: 11, minute: 20 },
-  { hour: 11, minute: 40 },
-  { hour: 12, minute: 0 },
-  { hour: 12, minute: 20 },
-  { hour: 12, minute: 40 },
-  { hour: 13, minute: 0 },
-  { hour: 13, minute: 20 },
-  { hour: 13, minute: 40 },
-  { hour: 14, minute: 0 },
-  { hour: 14, minute: 20 },
-  { hour: 14, minute: 40 },
-  { hour: 15, minute: 0 },
-  { hour: 15, minute: 20 },
-  { hour: 15, minute: 40 },
-  { hour: 16, minute: 0 },
-  { hour: 16, minute: 20 },
-  { hour: 16, minute: 40 },
-];
+export function getShiftForHour(pktHour: number): ShiftCategory {
+  if (pktHour >= 8 && pktHour < 16) return "MORNING";
+  if (pktHour >= 16 && pktHour < 24) return "EVENING";
+  return "NIGHT"; // 00:00 to 07:59
+}
+
+/**
+ * Deterministic active duty rotation assignment for doctors.
+ * Assigns doctors across Morning (صبح), Evening (شام), and Night (رات)
+ * so that when one doctor is on duty, other doctors are active on their respective shifts.
+ */
+export function getDoctorShift(doctorId: string): ShiftCategory {
+  let hash = 0;
+  for (let i = 0; i < doctorId.length; i++) {
+    hash = (hash * 31 + doctorId.charCodeAt(i)) >>> 0;
+  }
+  const shiftIndex = hash % 3;
+  if (shiftIndex === 0) return "MORNING";
+  if (shiftIndex === 1) return "EVENING";
+  return "NIGHT";
+}
+
+/**
+ * Full 24-Hour Schedule in exact 20-minute intervals (72 slots total per day):
+ * - 00:00 to 08:00 : Night Shift (24 slots)
+ * - 08:00 to 16:00 : Morning Shift (24 slots)
+ * - 16:00 to 24:00 : Evening Shift (24 slots)
+ */
+export const TWENTY_FOUR_HOUR_SLOT_TIMES: { hour: number; minute: number; shift: ShiftCategory }[] = [];
+for (let h = 0; h < 24; h++) {
+  for (const m of [0, 20, 40]) {
+    TWENTY_FOUR_HOUR_SLOT_TIMES.push({
+      hour: h,
+      minute: m,
+      shift: getShiftForHour(h),
+    });
+  }
+}
+
+/**
+ * Aliased for backwards compatibility with any existing imports.
+ */
+export const DAILY_SLOT_TIMES = TWENTY_FOUR_HOUR_SLOT_TIMES;
 
 /**
  * Helper: get hour (0-23) in Pakistan Standard Time (UTC+5, no DST).
@@ -53,10 +118,11 @@ export function isSlotPast(startsAt: Date | string): boolean {
 }
 
 /**
- * Ensures a doctor has all 21 slots (10:00 AM – 5:00 PM PKT) for a SINGLE day.
- * Always returns ALL 21 slots.
- * Does NOT overwrite existing BOOKED or BLOCKED slots.
- * Cleans up any legacy open slots outside 10:00 AM – 5:00 PM.
+ * Ensures a doctor has all 72 slots (24 Hours in 20-min intervals) for a SINGLE day.
+ * Respects Active Doctor Rotation:
+ * - Slots in the doctor's designated shift default to OPEN.
+ * - Slots in other shifts default to BLOCKED (Duty Handover / Rotation Coverage by other doctors).
+ * - Existing slots (BOOKED, custom OPEN, or BLOCKED) are NEVER overwritten.
  */
 export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | string = new Date()) {
   const dateIso = formatPktDateIso(targetDate);
@@ -76,25 +142,7 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
     orderBy: { startsAt: "asc" },
   });
 
-  // Clean up any historical open slots outside 10:00 AM – 5:00 PM PKT
-  const invalidSlotIds = existing
-    .filter((s) => {
-      const h = getPktHour(new Date(s.startsAt));
-      return s.status === SlotStatus.OPEN && (h < 10 || h >= 17);
-    })
-    .map((s) => s.id);
-
-  if (invalidSlotIds.length > 0) {
-    try {
-      await prisma.doctorAvailability.deleteMany({
-        where: { id: { in: invalidSlotIds } },
-      });
-    } catch (e) {
-      console.error("[slots] Error cleaning invalid slots:", e);
-    }
-  }
-
-  const validExisting = existing.filter((s) => !invalidSlotIds.includes(s.id));
+  const assignedShift = getDoctorShift(doctorId);
 
   const slotsToCreate: {
     doctorId: string;
@@ -104,13 +152,18 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
     status: SlotStatus;
   }[] = [];
 
-  for (const { hour, minute } of DAILY_SLOT_TIMES) {
-    // hour in PKT (10..16) -> UTC hour = hour - 5
+  for (const { hour, minute, shift } of TWENTY_FOUR_HOUR_SLOT_TIMES) {
+    // hour in PKT (0..23) -> UTC hour = hour - 5
     const startsAt = new Date(Date.UTC(year, month - 1, day, hour - 5, minute, 0, 0));
     const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
 
+    // Initial status based on active duty rotation:
+    // If the slot is in the doctor's active shift -> OPEN
+    // If slot is in an off-duty shift -> BLOCKED (Handover to on-duty rotation doctor)
+    const initialStatus = shift === assignedShift ? SlotStatus.OPEN : SlotStatus.BLOCKED;
+
     // Check if VIDEO slot exists
-    const hasVideo = validExisting.some(
+    const hasVideo = existing.some(
       (e) => e.mode === ConsultMode.VIDEO && e.startsAt.getTime() === startsAt.getTime(),
     );
     if (!hasVideo) {
@@ -119,12 +172,12 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
         startsAt,
         endsAt,
         mode: ConsultMode.VIDEO,
-        status: SlotStatus.OPEN,
+        status: initialStatus,
       });
     }
 
     // Check if CLINIC slot exists
-    const hasClinic = validExisting.some(
+    const hasClinic = existing.some(
       (e) => e.mode === ConsultMode.CLINIC && e.startsAt.getTime() === startsAt.getTime(),
     );
     if (!hasClinic) {
@@ -133,7 +186,7 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
         startsAt,
         endsAt,
         mode: ConsultMode.CLINIC,
-        status: SlotStatus.OPEN,
+        status: initialStatus,
       });
     }
   }
@@ -145,27 +198,22 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
         skipDuplicates: true,
       });
     } catch (e) {
-      console.error("[slots] Error creating standard day slots:", e);
+      console.error("[slots] Error creating 24-hour day slots:", e);
     }
   }
 
-  // Fetch all slots for this day strictly within 10:00 AM to 5:00 PM PKT
-  const allDaySlots = await prisma.doctorAvailability.findMany({
+  // Fetch all 72 slots for this 24-hour cycle
+  return await prisma.doctorAvailability.findMany({
     where: {
       doctorId,
       startsAt: { gte: pktDayStartUtc, lte: pktDayEndUtc },
     },
     orderBy: { startsAt: "asc" },
   });
-
-  return allDaySlots.filter((s) => {
-    const h = getPktHour(new Date(s.startsAt));
-    return h >= 10 && h < 17;
-  });
 }
 
 /**
- * For patient booking: ensures upcoming 7 days have all 21 slots generated.
+ * For patient booking: ensures upcoming 7 days have all 24-hour slots generated.
  */
 export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: number = 7) {
   const now = new Date();
@@ -173,23 +221,18 @@ export async function ensureDoctorUpcomingSlots(doctorId: string, daysAhead: num
   const [year, month, day] = dateIso.split("-").map(Number);
 
   for (let d = 0; d < daysAhead; d++) {
-    const target = new Date(Date.UTC(year, month - 1, day + d, 5, 0, 0, 0)); // 10 AM PKT
+    const target = new Date(Date.UTC(year, month - 1, day + d, 5, 0, 0, 0));
     await ensureDoctorDaySlots(doctorId, target);
   }
 
   const pktDayStartUtc = new Date(Date.UTC(year, month - 1, day, -5, 0, 0, 0));
   const pktFutureEndUtc = new Date(Date.UTC(year, month - 1, day + daysAhead, 18, 59, 59, 999));
 
-  const slots = await prisma.doctorAvailability.findMany({
+  return await prisma.doctorAvailability.findMany({
     where: {
       doctorId,
       startsAt: { gte: pktDayStartUtc, lte: pktFutureEndUtc },
     },
     orderBy: { startsAt: "asc" },
-  });
-
-  return slots.filter((s) => {
-    const h = getPktHour(new Date(s.startsAt));
-    return h >= 10 && h < 17;
   });
 }

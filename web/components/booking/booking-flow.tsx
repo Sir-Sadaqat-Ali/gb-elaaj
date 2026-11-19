@@ -276,14 +276,40 @@ function ChooseSlot({
   onSelectSlot: (id: string) => void;
 }) {
   const [selectedDayIndex, setSelectedDayIndex] = React.useState(0);
+  const [selectedShift, setSelectedShift] = React.useState<"ALL" | "MORNING" | "EVENING" | "NIGHT">("ALL");
   const activeGroup = grouped[selectedDayIndex] ?? grouped[0];
+
+  function getSlotShift(startsAt: string): "MORNING" | "EVENING" | "NIGHT" {
+    const h = (new Date(startsAt).getUTCHours() + 5) % 24;
+    if (h >= 8 && h < 16) return "MORNING";
+    if (h >= 16 && h < 24) return "EVENING";
+    return "NIGHT";
+  }
+
+  const daySlotsWithShift = React.useMemo(() => {
+    if (!activeGroup) return [];
+    return activeGroup.slots.map((s) => ({
+      ...s,
+      shift: getSlotShift(s.startsAt),
+    }));
+  }, [activeGroup]);
+
+  const filteredSlots = React.useMemo(() => {
+    if (selectedShift === "ALL") return daySlotsWithShift;
+    return daySlotsWithShift.filter((s) => s.shift === selectedShift);
+  }, [daySlotsWithShift, selectedShift]);
+
+  const morningCount = daySlotsWithShift.filter((s) => s.shift === "MORNING" && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now()).length;
+  const eveningCount = daySlotsWithShift.filter((s) => s.shift === "EVENING" && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now()).length;
+  const nightCount = daySlotsWithShift.filter((s) => s.shift === "NIGHT" && s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now()).length;
+  const totalOpenCount = daySlotsWithShift.filter((s) => s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now()).length;
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="ge-display text-[20px] sm:text-[22px] font-semibold text-ge-navy">Pick a date and time</h2>
-          <p className="mt-0.5 text-[12.5px] text-ge-muted">Live availability for {doctorName} · 20-min slots.</p>
+          <p className="mt-0.5 text-[12.5px] text-ge-muted">24-Hour availability for {doctorName} · 3 Shifts · 20-min slots.</p>
         </div>
 
         {/* Calendar Picker Shortcut */}
@@ -311,7 +337,7 @@ function ChooseSlot({
       {grouped.length === 0 ? (
         <p className="mt-5 text-sm text-ge-muted">No upcoming slots. Please check back tomorrow.</p>
       ) : (
-        <div className="mt-5 space-y-5">
+        <div className="mt-5 space-y-4">
           {/* Day Selector Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             {grouped.map((g, idx) => {
@@ -333,17 +359,71 @@ function ChooseSlot({
             })}
           </div>
 
+          {/* Shift Filter Pills */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setSelectedShift("ALL")}
+              className={`rounded-xl border px-3 py-1.5 text-center text-[11.5px] font-semibold transition ${
+                selectedShift === "ALL"
+                  ? "border-ge-primary bg-ge-primary text-white"
+                  : "border-ge-border bg-white text-ge-ink hover:bg-ge-soft-bg"
+              }`}
+            >
+              ⚡ All ({totalOpenCount} open)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedShift("MORNING")}
+              className={`rounded-xl border px-3 py-1.5 text-center text-[11.5px] font-semibold transition ${
+                selectedShift === "MORNING"
+                  ? "border-amber-500 bg-amber-500 text-white"
+                  : "border-ge-border bg-white text-amber-900 hover:bg-amber-50"
+              }`}
+            >
+              🌅 Morning ({morningCount} open)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedShift("EVENING")}
+              className={`rounded-xl border px-3 py-1.5 text-center text-[11.5px] font-semibold transition ${
+                selectedShift === "EVENING"
+                  ? "border-indigo-600 bg-indigo-600 text-white"
+                  : "border-ge-border bg-white text-indigo-900 hover:bg-indigo-50"
+              }`}
+            >
+              🌆 Evening ({eveningCount} open)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedShift("NIGHT")}
+              className={`rounded-xl border px-3 py-1.5 text-center text-[11.5px] font-semibold transition ${
+                selectedShift === "NIGHT"
+                  ? "border-purple-600 bg-purple-600 text-white"
+                  : "border-ge-border bg-white text-purple-900 hover:bg-purple-50"
+              }`}
+            >
+              🌙 Night ({nightCount} open)
+            </button>
+          </div>
+
           {/* Slots for Selected Day Only */}
           {activeGroup && (
             <div className="rounded-2xl border border-ge-border bg-ge-soft-bg/30 p-4">
-              <div className="mb-3 text-[13px] font-bold text-ge-navy">{activeGroup.day}</div>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7">
-                {activeGroup.slots.map((s) => {
+              <div className="mb-3 flex items-center justify-between text-[13px]">
+                <span className="font-bold text-ge-navy">{activeGroup.day}</span>
+                <span className="text-[11.5px] text-ge-muted">
+                  {filteredSlots.filter((s) => s.status === "OPEN" && new Date(s.startsAt).getTime() > Date.now()).length} slots available
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {filteredSlots.map((s) => {
                   const isPast = new Date(s.startsAt).getTime() < Date.now();
                   const isBooked = s.status === "BOOKED";
                   const isBlocked = s.status === "BLOCKED";
                   const isAvailable = !isPast && !isBooked && !isBlocked;
                   const isSelected = slotId === s.id;
+                  const shiftEmoji = s.shift === "MORNING" ? "🌅" : s.shift === "EVENING" ? "🌆" : "🌙";
 
                   if (isAvailable) {
                     return (
@@ -358,8 +438,11 @@ function ChooseSlot({
                             : "border-ge-border bg-white text-ge-ink hover:border-ge-primary hover:bg-ge-blue-tint/50"
                         }`}
                       >
-                        <div>{formatTime(new Date(s.startsAt))}</div>
-                        <div className={`mt-0.5 text-[10px] ${isSelected ? "text-white/90" : "text-ge-primary font-medium"}`}>
+                        <div className="flex items-center justify-center gap-1 text-[11px] opacity-75">
+                          <span>{shiftEmoji}</span>
+                        </div>
+                        <div className="font-bold">{formatTime(new Date(s.startsAt))}</div>
+                        <div className={`mt-0.5 text-[10px] ${isSelected ? "text-white/90" : "text-emerald-700 font-semibold"}`}>
                           Available
                         </div>
                       </button>
@@ -387,14 +470,14 @@ function ChooseSlot({
                     return (
                       <div
                         key={s.id}
-                        className="rounded-2xl border border-neutral-200 bg-neutral-100 p-2 text-center cursor-not-allowed opacity-60"
-                        title="Unavailable"
+                        className="rounded-2xl border border-neutral-200 bg-neutral-100/70 p-2 text-center cursor-not-allowed opacity-60"
+                        title="Off-Duty / Unavailable"
                       >
-                        <div className="text-[12px] font-medium text-neutral-500">
+                        <div className="text-[11px] font-medium text-neutral-500">
                           {formatTime(new Date(s.startsAt))}
                         </div>
-                        <div className="mt-0.5 text-[10px] text-neutral-400">
-                          Unavailable
+                        <div className="mt-0.5 text-[9.5px] text-neutral-400">
+                          Off Duty
                         </div>
                       </div>
                     );
@@ -406,10 +489,10 @@ function ChooseSlot({
                       className="rounded-2xl border border-neutral-100 bg-neutral-50/60 p-2 text-center cursor-not-allowed opacity-40"
                       title="Passed"
                     >
-                      <div className="text-[12px] font-medium text-neutral-400">
+                      <div className="text-[11px] font-medium text-neutral-400">
                         {formatTime(new Date(s.startsAt))}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-neutral-400">
+                      <div className="mt-0.5 text-[9.5px] text-neutral-400">
                         Passed
                       </div>
                     </div>

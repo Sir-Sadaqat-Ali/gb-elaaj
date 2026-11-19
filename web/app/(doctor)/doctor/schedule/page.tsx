@@ -4,15 +4,13 @@ import { requireRole } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
 import { DOCTOR_NAV } from "@/app/(doctor)/doctor/_nav";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ConfirmButton } from "@/components/data/confirm-button";
-import { blockSlotAction, toggleDayOffAction } from "@/lib/actions/schedule";
-import { ensureDoctorDaySlots } from "@/lib/slots";
+import { ensureDoctorDaySlots, getDoctorShift, getShiftForHour, getPktHour } from "@/lib/slots";
 import { formatDate, formatTime, formatPktDateIso } from "@/lib/formatting";
-import { Video, Building, Lock, CheckCircle2, ChevronLeft, ChevronRight, Palmtree } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { DoctorScheduleManager, type ScheduleSlotItem } from "@/components/doctor/doctor-schedule-manager";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Schedule" };
+export const metadata = { title: "Schedule & Shifts" };
 
 export default async function DoctorSchedulePage({
   searchParams,
@@ -55,8 +53,8 @@ export default async function DoctorSchedulePage({
   const [y, m, d] = activeDateIso.split("-").map(Number);
   const activeDate = new Date(Date.UTC(y, m - 1, d, 5, 0, 0, 0)); // 10 AM PKT
 
-  // Ensure standard 10:00 AM – 5:00 PM (20-min) slots exist for this ONE day
-  const slots = await ensureDoctorDaySlots(me.doctor.id, activeDateIso);
+  // Ensure standard 24-Hour (20-min) slots exist for this ONE day
+  const dbSlots = await ensureDoctorDaySlots(me.doctor.id, activeDateIso);
 
   const prevDate = new Date(Date.UTC(y, m - 1, d - 1, 5, 0, 0, 0));
   const prevDateStr = formatPktDateIso(prevDate);
@@ -67,20 +65,36 @@ export default async function DoctorSchedulePage({
   const isToday = activeDateIso === todayIso;
   const dateHeading = isToday ? `Today · ${formatDate(activeDate)}` : formatDate(activeDate);
 
-  const totalOpen = slots.filter((s) => s.status === "OPEN").length;
-  const totalBlocked = slots.filter((s) => s.status === "BLOCKED").length;
-  const totalBooked = slots.filter((s) => s.status === "BOOKED").length;
-  const isFullDayOff = totalOpen === 0 && totalBlocked > 0;
+  const assignedShift = getDoctorShift(me.doctor.id);
+
+  // Map to slot items
+  const scheduleSlots: ScheduleSlotItem[] = dbSlots.map((s) => {
+    const pktH = getPktHour(new Date(s.startsAt));
+    const shift = getShiftForHour(pktH);
+    return {
+      id: s.id,
+      startsAt: s.startsAt.toISOString(),
+      endsAt: s.endsAt.toISOString(),
+      mode: s.mode,
+      status: s.status as "OPEN" | "BLOCKED" | "BOOKED",
+      shift,
+      timeLabel: formatTime(s.startsAt),
+    };
+  });
+
+  const totalOpen = scheduleSlots.filter((s) => s.status === "OPEN").length;
+  const totalBlocked = scheduleSlots.filter((s) => s.status === "BLOCKED").length;
+  const totalBooked = scheduleSlots.filter((s) => s.status === "BOOKED").length;
 
   return (
     <AppShell
       navItems={DOCTOR_NAV}
       user={{ name: me.name, role: "Doctor", image: me.image }}
-      title="Daily Schedule"
-      subtitle="Standard 10:00 AM – 5:00 PM operating hours (20-min intervals). Real-time daily view."
+      title="Daily Schedule & Shift Rotation"
+      subtitle="24-Hour coverage with 3 working shifts: Morning (صبح), Evening (شام), and Night (رات)."
     >
       <div className="space-y-6">
-        {/* Single Day Card */}
+        {/* Day Card */}
         <Card className="rounded-3xl border border-ge-border bg-white p-6 shadow-xs">
           {/* Header with Date Navigation */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ge-border pb-5">
@@ -94,7 +108,7 @@ export default async function DoctorSchedulePage({
                 )}
               </div>
               <p className="mt-1 text-[12.5px] text-ge-muted">
-                10:00 AM to 5:00 PM (20-min slots) · {totalOpen} active, {totalBlocked} blocked, {totalBooked} booked
+                24-Hour Active Rotation · {totalOpen} active, {totalBlocked} disabled, {totalBooked} booked
               </p>
             </div>
 
@@ -146,115 +160,13 @@ export default async function DoctorSchedulePage({
             })}
           </div>
 
-          {/* Day Off Banner if whole day is blocked */}
-          {isFullDayOff && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-                  <Palmtree className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-[13.5px] font-bold text-amber-900">Marked as Day Off (چھٹی / Vacation)</h4>
-                  <p className="text-[12px] text-amber-700">All available slots for this date are blocked. Patients cannot book you on this day.</p>
-                </div>
-              </div>
-              <ConfirmButton
-                action={toggleDayOffAction}
-                arg={{ dateIso: activeDateIso, markOff: false }}
-                label="✅ Resume Working Day (چھٹی ختم کریں)"
-                variant="primary"
-                successMsg="Slots are now open for patient bookings."
-                className="h-9 px-4 text-[12px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-              />
-            </div>
-          )}
-
-          {/* Quick Summary Pill Bar & Action Button */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[12px]">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 border border-emerald-200">
-                <CheckCircle2 className="h-3.5 w-3.5" /> {totalOpen} Active Slots
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 font-medium text-neutral-700 border border-neutral-300">
-                <Lock className="h-3.5 w-3.5" /> {totalBlocked} Blocked
-              </span>
-              {totalBooked > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-medium text-ge-primary border border-blue-200">
-                  ● {totalBooked} Booked
-                </span>
-              )}
-            </div>
-
-            {/* Quick 1-Click Day Off Action */}
-            {!isFullDayOff && totalOpen > 0 && (
-              <ConfirmButton
-                action={toggleDayOffAction}
-                arg={{ dateIso: activeDateIso, markOff: true }}
-                label="🌴 Mark Day Off (چھٹی)"
-                variant="ghost"
-                confirmText="Are you sure you want to mark this day as Day Off? All open slots will be blocked."
-                successMsg="Marked as Day Off. All open slots are now blocked."
-                className="h-8 px-3 text-[11.5px] font-semibold text-amber-700 border border-amber-300 hover:bg-amber-50"
-              />
-            )}
-          </div>
-
-          {/* 10:00 AM – 5:00 PM Slots Grid (Exactly 1 day) */}
-          <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {slots.map((s) => (
-              <div
-                key={s.id}
-                className={`flex items-center justify-between gap-2 rounded-2xl border p-3 transition ${
-                  s.status === "OPEN"
-                    ? "border-emerald-200 bg-emerald-50/40"
-                    : s.status === "BLOCKED"
-                    ? "border-neutral-200 bg-neutral-50/80 opacity-75"
-                    : "border-blue-200 bg-blue-50/50"
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-[13px] text-ge-ink">
-                      {formatTime(s.startsAt)}
-                    </span>
-                    <span className="text-[11px] text-ge-muted inline-flex items-center gap-0.5">
-                      {s.mode === "VIDEO" ? (
-                        <Video className="h-3 w-3 text-ge-primary" />
-                      ) : (
-                        <Building className="h-3 w-3 text-emerald-600" />
-                      )}
-                      {s.mode === "VIDEO" ? "Video" : "Clinic"}
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <Badge
-                      variant={
-                        s.status === "BOOKED"
-                          ? "info"
-                          : s.status === "OPEN"
-                          ? "success"
-                          : "neutral"
-                      }
-                    >
-                      {s.status === "OPEN" ? "Active" : s.status === "BLOCKED" ? "Blocked" : "Booked"}
-                    </Badge>
-                  </div>
-                </div>
-
-                {s.status !== "BOOKED" ? (
-                  <ConfirmButton
-                    action={blockSlotAction}
-                    arg={{ slotId: s.id }}
-                    label={s.status === "BLOCKED" ? "Active" : "Block"}
-                    variant={s.status === "BLOCKED" ? "primary" : "ghost"}
-                    successMsg={s.status === "BLOCKED" ? "Slot is now active." : "Slot blocked."}
-                    className="h-7 px-3 text-[11.5px]"
-                  />
-                ) : (
-                  <span className="text-[11px] font-semibold text-ge-primary">Booked</span>
-                )}
-              </div>
-            ))}
+          {/* Doctor Schedule Manager (Shift Control Center + 3 Shift Cards + Filter Tabs + Editable Dabbe Dabbe) */}
+          <div className="mt-6">
+            <DoctorScheduleManager
+              dateIso={activeDateIso}
+              assignedShift={assignedShift}
+              slots={scheduleSlots}
+            />
           </div>
         </Card>
       </div>
