@@ -58,9 +58,7 @@ export function getShiftForHour(pktHour: number): ShiftCategory {
 }
 
 /**
- * Deterministic active duty rotation assignment for doctors.
- * Assigns doctors across Morning (صبح), Evening (شام), and Night (رات)
- * so that when one doctor is on duty, other doctors are active on their respective shifts.
+ * Deterministic fallback duty rotation for doctors.
  */
 export function getDoctorShift(doctorId: string): ShiftCategory {
   let hash = 0;
@@ -119,10 +117,10 @@ export function isSlotPast(startsAt: Date | string): boolean {
 
 /**
  * Ensures a doctor has all 72 slots (24 Hours in 20-min intervals) for a SINGLE day.
- * Respects Active Doctor Rotation:
- * - Slots in the doctor's designated shift default to OPEN.
- * - Slots in other shifts default to BLOCKED (Duty Handover / Rotation Coverage by other doctors).
- * - Existing slots (BOOKED, custom OPEN, or BLOCKED) are NEVER overwritten.
+ * Default Policy:
+ * - By default, ALL 3 shifts (Morning, Evening, Night) are 100% OPEN for every doctor.
+ * - Each doctor can choose or customize their daily shift (e.g. today 23rd, tomorrow 24th) from the portal.
+ * - If a doctor has not explicitly customized a date, any unbooked legacy-blocked slots are opened up automatically.
  */
 export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | string = new Date()) {
   const dateIso = formatPktDateIso(targetDate);
@@ -142,7 +140,38 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
     orderBy: { startsAt: "asc" },
   });
 
-  const assignedShift = getDoctorShift(doctorId);
+  // Check if doctor has explicitly saved custom shifts or day-off for this specific date
+  let hasDoctorCustomized = false;
+  try {
+    const customLog = await prisma.auditLog.findFirst({
+      where: {
+        targetType: "DoctorProfile",
+        targetId: doctorId,
+        action: { in: ["schedule.shift_rotation_set", "schedule.day_off_marked", "schedule.day_off_cleared"] },
+        meta: { path: ["dateIso"], equals: dateIso },
+      },
+    });
+    hasDoctorCustomized = !!customLog;
+  } catch {
+    hasDoctorCustomized = false;
+  }
+
+  // If doctor has NOT manually customized this date, ensure all unbooked slots are OPEN by default
+  if (!hasDoctorCustomized && existing.length > 0) {
+    const unbookedBlockedIds = existing
+      .filter((s) => s.status === SlotStatus.BLOCKED)
+      .map((s) => s.id);
+    if (unbookedBlockedIds.length > 0) {
+      try {
+        await prisma.doctorAvailability.updateMany({
+          where: { id: { in: unbookedBlockedIds } },
+          data: { status: SlotStatus.OPEN },
+        });
+      } catch (e) {
+        console.error("[slots] Error updating default open slots:", e);
+      }
+    }
+  }
 
   const slotsToCreate: {
     doctorId: string;
@@ -152,15 +181,13 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
     status: SlotStatus;
   }[] = [];
 
-  for (const { hour, minute, shift } of TWENTY_FOUR_HOUR_SLOT_TIMES) {
+  for (const { hour, minute } of TWENTY_FOUR_HOUR_SLOT_TIMES) {
     // hour in PKT (0..23) -> UTC hour = hour - 5
     const startsAt = new Date(Date.UTC(year, month - 1, day, hour - 5, minute, 0, 0));
     const endsAt = new Date(startsAt.getTime() + 20 * 60 * 1000);
 
-    // Initial status based on active duty rotation:
-    // If the slot is in the doctor's active shift -> OPEN
-    // If slot is in an off-duty shift -> BLOCKED (Handover to on-duty rotation doctor)
-    const initialStatus = shift === assignedShift ? SlotStatus.OPEN : SlotStatus.BLOCKED;
+    // Default is 100% OPEN across Morning, Evening, and Night
+    const initialStatus = SlotStatus.OPEN;
 
     // Check if VIDEO slot exists
     const hasVideo = existing.some(

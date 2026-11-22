@@ -122,6 +122,22 @@ export function DoctorCalendarSlots({
   const openNightCount = nightSlots.filter((s) => s.isOpen).length;
   const openTotalCount = slotPills.filter((s) => s.isOpen).length;
 
+  const activeShiftBadge = React.useMemo(() => {
+    if (openTotalCount === 0) {
+      return { label: "Day Off (چھٹی)", color: "bg-amber-100 text-amber-900 border-amber-300" };
+    }
+    if (openMorningCount > 0 && openEveningCount === 0 && openNightCount === 0) {
+      return { label: "Active Shift: 🌅 Morning (صبح)", color: "bg-amber-100 text-amber-900 border-amber-300" };
+    }
+    if (openEveningCount > 0 && openMorningCount === 0 && openNightCount === 0) {
+      return { label: "Active Shift: 🌆 Evening (شام)", color: "bg-indigo-100 text-indigo-900 border-indigo-300" };
+    }
+    if (openNightCount > 0 && openMorningCount === 0 && openEveningCount === 0) {
+      return { label: "Active Shift: 🌙 Night (رات)", color: "bg-purple-100 text-purple-900 border-purple-300" };
+    }
+    return { label: "⚡ 24-Hour Active (تمام شفٹیں ایکٹیو)", color: "bg-emerald-100 text-emerald-800 border-emerald-300" };
+  }, [openTotalCount, openMorningCount, openEveningCount, openNightCount]);
+
   const filteredSlots =
     selectedShift === "ALL"
       ? slotPills
@@ -274,11 +290,9 @@ export function DoctorCalendarSlots({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ge-primary">
                 Available Shifts & Timings
               </span>
-              {doctorShift && (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10.5px] font-bold text-ge-primary">
-                  Rotation: {SHIFT_CONFIG[doctorShift].emoji} {SHIFT_CONFIG[doctorShift].labelEn} ({SHIFT_CONFIG[doctorShift].labelUr})
-                </span>
-              )}
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold border ${activeShiftBadge.color}`}>
+                {activeShiftBadge.label}
+              </span>
             </div>
             <h3 className="text-[16px] font-bold text-ge-ink">
               {activeDateIso === todayIso ? "Today" : selectedDateLabel.split(",")[0]} · {selectedDateLabel}
@@ -389,7 +403,7 @@ export function DoctorCalendarSlots({
             <div>
               <strong>Doctor is off-duty during {SHIFT_CONFIG[selectedShift].labelEn} Shift ({SHIFT_CONFIG[selectedShift].labelUr}).</strong>
               <div className="text-[11.5px] text-blue-700">
-                Gb Elaaj rotates doctors across 24 hours. This doctor is active during their primary shift ({doctorShift ? SHIFT_CONFIG[doctorShift].labelEn : "Morning"}). Select &quot;All Shifts&quot; above to view available consultation slots.
+                Doctor has designated their consultation hours to another shift on this date. Select &quot;All Shifts&quot; above to view all available slots.
               </div>
             </div>
           </div>
