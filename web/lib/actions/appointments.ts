@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { calcCommission } from "@/lib/commission";
 import { sendEmailFor } from "@/lib/notifications/send-email";
 import { formatPkr } from "@/lib/formatting";
+import { createEasyPaisaPaymentUrl } from "@/lib/payments/easypaisa";
 import {
   bookAppointmentSchema,
   cancelAppointmentSchema,
@@ -60,36 +61,40 @@ export async function bookAppointmentAction(input: BookAppointmentInput): Promis
 
       const fee = slot.mode === "VIDEO" ? doctor.consultFeePaisa : doctor.clinicFeePaisa || doctor.consultFeePaisa;
       bookedSummary = { when: slot.startsAt, mode: slot.mode, fee };
+
+      const isEasyPaisa = parsed.data.paymentMethod === "easypaisa";
+      const initialStatus = isEasyPaisa ? AppointmentStatus.PENDING : AppointmentStatus.CONFIRMED;
+      const initialTxnStatus = isEasyPaisa ? TransactionStatus.PENDING : TransactionStatus.SUCCEEDED;
+
       const appt = await tx.appointment.create({
         data: {
           patientId: patient.id,
           doctorId: doctor.id,
           slotId: slot.id,
           mode: slot.mode,
-          status: AppointmentStatus.CONFIRMED,
+          status: initialStatus,
           feePaisa: fee,
           symptoms: parsed.data.symptoms,
           scheduledFor: slot.startsAt,
           durationMin: Math.max(10, Math.round((slot.endsAt.getTime() - slot.startsAt.getTime()) / 60_000)),
-          videoRoomId: null, // populated immediately below
+          videoRoomId: null, // populated immediately below if confirmed
         },
       });
 
-      // Set the Agora channel name based on the created appointment id.
-      // Channel naming convention: `appt-<cuid>` — globally unique, ≤32 chars.
-      if (slot.mode === "VIDEO") {
+      // Set the Agora channel name based on the created appointment id if confirmed now
+      if (slot.mode === "VIDEO" && !isEasyPaisa) {
         await tx.appointment.update({
           where: { id: appt.id },
           data: { videoRoomId: `appt-${appt.id}` },
         });
       }
 
-      // Compute commission and write a Transaction (placeholder payment)
+      // Compute commission and write a Transaction
       const commission = await calcCommission(fee, TransactionKind.CONSULTATION);
       await tx.transaction.create({
         data: {
           kind: TransactionKind.CONSULTATION,
-          status: TransactionStatus.SUCCEEDED,
+          status: initialTxnStatus,
           grossPaisa: commission.grossPaisa,
           commissionPaisa: commission.commissionPaisa,
           netPaisa: commission.netPaisa,
@@ -98,26 +103,28 @@ export async function bookAppointmentAction(input: BookAppointmentInput): Promis
           providerRole: Role.DOCTOR,
           providerId: doctor.id,
           appointmentId: appt.id,
-          capturedAt: new Date(),
+          capturedAt: isEasyPaisa ? null : new Date(),
         },
       });
 
-      await tx.notification.create({
-        data: {
-          userId: doctor.userId,
-          title: "New appointment confirmed",
-          body: `${session.user.name ?? "A patient"} booked you for ${slot.startsAt.toLocaleString()}.`,
-          href: `/doctor/appointments`,
-        },
-      });
-      await tx.notification.create({
-        data: {
-          userId: session.user.id,
-          title: "Appointment confirmed",
-          body: `Your ${slot.mode === "VIDEO" ? "video" : "clinic"} consultation with ${doctor.user.name} is confirmed.`,
-          href: `/patient/appointments`,
-        },
-      });
+      if (!isEasyPaisa) {
+        await tx.notification.create({
+          data: {
+            userId: doctor.userId,
+            title: "New appointment confirmed",
+            body: `${session.user.name ?? "A patient"} booked you for ${slot.startsAt.toLocaleString()}.`,
+            href: `/doctor/appointments`,
+          },
+        });
+        await tx.notification.create({
+          data: {
+            userId: session.user.id,
+            title: "Appointment confirmed",
+            body: `Your ${slot.mode === "VIDEO" ? "video" : "clinic"} consultation with ${doctor.user.name} is confirmed.`,
+            href: `/patient/appointments`,
+          },
+        });
+      }
 
       await tx.auditLog.create({
         data: {
@@ -139,7 +146,22 @@ export async function bookAppointmentAction(input: BookAppointmentInput): Promis
     return { ok: false, error: "Something went wrong booking the appointment." };
   }
 
-  // Email confirmation to the patient (in addition to the in-app row).
+  if (parsed.data.paymentMethod === "easypaisa" && bookedSummary) {
+    const summary = bookedSummary as { when: Date; mode: string; fee: number };
+    const paymentUrl = await createEasyPaisaPaymentUrl({
+      orderRefNum: `appt_${appointmentId}`,
+      amountPaisa: summary.fee,
+      email: session.user.email || "patient@gbelaaj.com",
+      phone: (session.user as any).phone || undefined,
+      appointmentId,
+      doctorName: doctor.user.name,
+    });
+    revalidatePath("/patient/appointments");
+    revalidatePath("/doctor/appointments");
+    redirect(paymentUrl);
+  }
+
+  // Email confirmation to the patient (for non-gateway bookings)
   if (bookedSummary) {
     const summary = bookedSummary as { when: Date; mode: string; fee: number };
     await sendEmailFor({

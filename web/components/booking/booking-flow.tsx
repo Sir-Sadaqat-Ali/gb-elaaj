@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, ArrowRight, Building, Check, Landmark, Lock, Stethoscope, Video, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building, Check, Landmark, Lock, Stethoscope, Video, Smartphone, Calendar as CalendarIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -38,7 +38,7 @@ export function BookingFlow({
   const [mode, setMode] = React.useState<"VIDEO" | "CLINIC">(initialSlot?.mode ?? "VIDEO");
   const [slotId, setSlotId] = React.useState<string | null>(initialSlot?.id ?? null);
   const [symptoms, setSymptoms] = React.useState("");
-  const [paymentMethod, setPaymentMethod] = React.useState<"bank_transfer" | "wallet">("bank_transfer");
+  const [paymentMethod, setPaymentMethod] = React.useState<"easypaisa" | "bank_transfer" | "wallet">("easypaisa");
   const [pending, start] = React.useTransition();
 
   const fee = mode === "VIDEO" ? videoFeePaisa : clinicFeePaisa || videoFeePaisa;
@@ -198,8 +198,12 @@ export function BookingFlow({
             Continue <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={submit} loading={pending}>
-            Pay & confirm <Lock className="h-4 w-4" />
+          <Button onClick={submit} loading={pending} className="gap-2">
+            {paymentMethod === "easypaisa" ? (
+              <>Pay with EasyPaisa · {formatPkr(fee)} <Lock className="h-4 w-4" /></>
+            ) : (
+              <>Pay & confirm <Lock className="h-4 w-4" /></>
+            )}
           </Button>
         )}
       </div>
@@ -549,8 +553,8 @@ function Confirm({
   fee: number;
   selectedSlot: Slot | null;
   mode: "VIDEO" | "CLINIC";
-  paymentMethod: "bank_transfer" | "wallet";
-  setPaymentMethod: (m: "bank_transfer" | "wallet") => void;
+  paymentMethod: "easypaisa" | "bank_transfer" | "wallet";
+  setPaymentMethod: (m: "easypaisa" | "bank_transfer" | "wallet") => void;
   symptoms: string;
 }) {
   return (
@@ -570,31 +574,45 @@ function Confirm({
           <div className="mb-2 text-[12px] font-semibold text-ge-navy">Payment method</div>
           <div className="space-y-1.5">
             {([
-              { id: "bank_transfer", icon: Landmark, label: "Bank Transfer (HBL)", sub: "Direct transfer · recommended" },
-              { id: "wallet", icon: Stethoscope, label: "Pay later (clinic)", sub: "On-site at the clinic" },
+              { id: "easypaisa", icon: Smartphone, label: "EasyPaisa / Card (ایزی پیسہ آن لائن)", sub: "Instant online gateway payment · Recommended", badge: "Instant" },
+              { id: "bank_transfer", icon: Landmark, label: "Bank Transfer (HBL)", sub: "Direct manual transfer", badge: null },
+              { id: "wallet", icon: Stethoscope, label: "Pay later (clinic)", sub: "On-site cash at the clinic", badge: null },
             ] as const).map((p) => (
               <label
                 key={p.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 ${
-                  paymentMethod === p.id ? "border-ge-primary bg-ge-blue-tint" : "border-ge-border bg-white"
+                className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition ${
+                  paymentMethod === p.id ? "border-ge-primary bg-ge-blue-tint ring-1 ring-ge-primary/30" : "border-ge-border bg-white hover:border-ge-primary/40"
                 }`}
               >
                 <input type="radio" name="pay" checked={paymentMethod === p.id} onChange={() => setPaymentMethod(p.id)} className="accent-ge-primary" />
                 <p.icon className="h-4 w-4 text-ge-primary" />
                 <span className="flex-1">
-                  <span className="block text-[12.5px] font-semibold text-ge-ink">{p.label}</span>
+                  <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ge-ink">
+                    <span>{p.label}</span>
+                    {p.badge && <span className="rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[9px] font-bold">{p.badge}</span>}
+                  </span>
                   <span className="block text-[10.5px] text-ge-muted">{p.sub}</span>
                 </span>
               </label>
             ))}
           </div>
+          {paymentMethod === "easypaisa" && (
+            <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 text-[11.5px] text-emerald-950">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                <Lock className="h-3.5 w-3.5" /> Official EasyPaisa Gateway
+              </div>
+              <p className="mt-1 text-emerald-900 leading-relaxed text-[11px]">
+                Aap ko EasyPaisa ke secure portal par redirect kiya jayega. Payment complete hote hi appointment <strong>foran automatically confirm</strong> ho jayegi aur doctor schedule mein add ho jayegi.
+              </p>
+            </div>
+          )}
           {paymentMethod === "bank_transfer" && (
             <div className="mt-3">
               <BankTransferDetails amountPaisa={fee} />
             </div>
           )}
           <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-ge-muted">
-            <Lock className="h-3 w-3" /> Transfer the total to the account shown, then confirm. Your booking is reserved while we verify payment.
+            <Lock className="h-3 w-3" /> Secure encryption · 100% refundable up to 1hr before appointment.
           </p>
         </div>
       </div>
