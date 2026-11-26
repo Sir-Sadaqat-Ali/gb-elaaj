@@ -63,7 +63,7 @@ export default async function NewReviewPage({ params }: { params: Promise<{ appo
             <Avatar src={appt.doctor.user.image} name={appt.doctor.user.name} size={40} />
             <div>
               <div className="text-[13px] font-semibold text-ge-ink">{appt.doctor.user.name}</div>
-              <div className="text-[11px] text-ge-primary">{appt.doctor.specialties[0]?.specialty.nameEn}</div>
+              <div className="text-[11px] text-ge-primary">{appt.doctor.specialties?.[0]?.specialty?.nameEn ?? "Specialist"}</div>
               <div className="text-[10.5px] text-ge-muted">{formatDate(appt.scheduledFor)}</div>
             </div>
           </div>

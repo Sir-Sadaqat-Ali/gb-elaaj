@@ -84,7 +84,7 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
                   <Avatar src={d.user.image} name={d.user.name} size={32} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium text-ge-ink">{d.user.name}</div>
-                    <div className="truncate text-[11px] text-ge-muted">{d.specialties[0]?.specialty.nameEn ?? "—"} · PMDC {d.pmdcNumber}</div>
+                    <div className="truncate text-[11px] text-ge-muted">{d.specialties?.[0]?.specialty?.nameEn ?? "—"} · PMDC {d.pmdcNumber}</div>
                   </div>
                   <Badge variant={d.verifiedStatus === "APPROVED" ? "success" : "warning"}>{d.verifiedStatus}</Badge>
                 </Link>

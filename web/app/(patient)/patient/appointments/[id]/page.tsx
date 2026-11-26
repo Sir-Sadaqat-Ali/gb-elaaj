@@ -95,7 +95,7 @@ export default async function PatientAppointmentDetail({
                   <span>{appt.doctor.user.name}</span>
                 </div>
               } />
-              <KV label="Specialty" value={appt.doctor.specialties[0]?.specialty.nameEn ?? "—"} />
+              <KV label="Specialty" value={appt.doctor.specialties?.[0]?.specialty?.nameEn ?? "—"} />
               <KV label="Mode" value={appt.mode === "VIDEO" ? "Video" : "Clinic"} />
               <KV label="Duration" value={`${appt.durationMin} min`} />
               <KV label="Date" value={formatDate(appt.scheduledFor)} />

@@ -153,7 +153,20 @@ export async function ensureDoctorDaySlots(doctorId: string, targetDate: Date | 
     });
     hasDoctorCustomized = !!customLog;
   } catch {
-    hasDoctorCustomized = false;
+    try {
+      const logs = await prisma.auditLog.findMany({
+        where: {
+          targetType: "DoctorProfile",
+          targetId: doctorId,
+          action: { in: ["schedule.shift_rotation_set", "schedule.day_off_marked", "schedule.day_off_cleared"] },
+        },
+        take: 30,
+        orderBy: { createdAt: "desc" },
+      });
+      hasDoctorCustomized = logs.some((l) => (l.meta as any)?.dateIso === dateIso);
+    } catch {
+      hasDoctorCustomized = false;
+    }
   }
 
   // If doctor has NOT manually customized this date, ensure all unbooked slots are OPEN by default

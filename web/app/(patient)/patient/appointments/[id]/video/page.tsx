@@ -49,7 +49,7 @@ export default async function PatientVideoPage({ params }: { params: Promise<{ i
             <Avatar src={appt.doctor.user.image} name={appt.doctor.user.name} size={36} />
             <div>
               <div className="text-[13px] font-semibold text-ge-ink">{appt.doctor.user.name}</div>
-              <div className="text-[11px] text-ge-muted">{appt.doctor.specialties[0]?.specialty.nameEn}</div>
+              <div className="text-[11px] text-ge-muted">{appt.doctor.specialties?.[0]?.specialty?.nameEn ?? "Specialist"}</div>
             </div>
           </div>
           <div className="mt-4 flex flex-col gap-2">

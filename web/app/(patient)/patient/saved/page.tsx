@@ -40,11 +40,11 @@ export default async function SavedDoctorsPage() {
                 <Avatar src={d.user.image} name={d.user.name} size={44} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13.5px] font-semibold text-ge-ink">{d.user.name}</div>
-                  <div className="truncate text-[11.5px] text-ge-primary">{d.specialties[0]?.specialty.nameEn ?? "—"}</div>
+                  <div className="truncate text-[11.5px] text-ge-primary">{d.specialties?.[0]?.specialty?.nameEn ?? "—"}</div>
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ge-muted">
-                    <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-current text-[color:var(--ge-star)]" /> {d.ratingAvg.toFixed(1)}</span>
+                    <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-current text-[color:var(--ge-star)]" /> {(d.ratingAvg ?? 0).toFixed(1)}</span>
                     <span>·</span>
-                    <span>{d.city.nameEn}</span>
+                    <span>{d.city?.nameEn ?? "Pakistan"}</span>
                     <span>·</span>
                     <span className="ge-mono">{formatPkr(d.consultFeePaisa)}</span>
                   </div>

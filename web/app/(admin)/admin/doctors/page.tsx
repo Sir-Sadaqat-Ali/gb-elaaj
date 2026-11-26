@@ -33,10 +33,10 @@ export default async function AdminDoctorsPage() {
         </div>
       ),
     },
-    { key: "spec", header: "Specialty", cell: (d) => d.specialties[0]?.specialty.nameEn ?? "—" },
-    { key: "city", header: "City", cell: (d) => d.city.nameEn },
+    { key: "spec", header: "Specialty", cell: (d) => d.specialties?.[0]?.specialty?.nameEn ?? "—" },
+    { key: "city", header: "City", cell: (d) => d.city?.nameEn ?? "Pakistan" },
     { key: "fee", header: "Video fee", align: "right", cell: (d) => <span className="ge-mono">{formatPkr(d.consultFeePaisa)}</span> },
-    { key: "rating", header: "Rating", align: "right", cell: (d) => `${d.ratingAvg.toFixed(1)}★ (${d.ratingCount})` },
+    { key: "rating", header: "Rating", align: "right", cell: (d) => `${(d.ratingAvg ?? 0).toFixed(1)}★ (${d.ratingCount ?? 0})` },
     {
       key: "verif", header: "Verification", cell: (d) => (
         <Badge variant={d.verifiedStatus === "APPROVED" ? "success" : d.verifiedStatus === "PENDING" ? "warning" : "danger"}>

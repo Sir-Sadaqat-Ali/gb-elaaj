@@ -108,7 +108,7 @@ export default async function AdminDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[12.5px] font-semibold text-ge-ink">{d.user.name}</div>
                     <div className="text-[11px] text-ge-muted">
-                      {d.specialties[0]?.specialty.nameEn ?? "—"} · PMDC {d.pmdcNumber}
+                      {d.specialties?.[0]?.specialty?.nameEn ?? "—"} · PMDC {d.pmdcNumber}
                     </div>
                   </div>
                   <Button asChild size="sm">

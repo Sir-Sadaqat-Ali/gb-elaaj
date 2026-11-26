@@ -167,7 +167,7 @@ export default async function PatientDashboardPage() {
                 <Avatar src={d.user.image} name={d.user.name} size={44} />
                 <div className="min-w-0">
                   <div className="truncate text-[13px] font-semibold text-ge-ink">{d.user.name}</div>
-                  <div className="text-[11px] text-ge-muted">{d.specialties[0]?.specialty.nameEn}</div>
+                  <div className="text-[11px] text-ge-muted">{d.specialties?.[0]?.specialty?.nameEn ?? "Doctor"}</div>
                 </div>
               </Link>
             ))}
@@ -212,7 +212,7 @@ function UpcomingAppointmentCard({
         <div className="flex-1">
           <div className="text-[16px] font-semibold">{upcoming.doctor.user.name}</div>
           <div className="text-[12px] text-white/75">
-            {upcoming.doctor.specialties[0]?.specialty.nameEn} · {formatDate(upcoming.scheduledFor)} · {upcoming.mode === "VIDEO" ? "Video" : "Clinic"} consultation
+            {upcoming.doctor.specialties?.[0]?.specialty?.nameEn ?? "Doctor"} · {formatDate(upcoming.scheduledFor)} · {upcoming.mode === "VIDEO" ? "Video" : "Clinic"} consultation
           </div>
         </div>
         <Button asChild className="bg-white text-ge-primary hover:bg-white/90">

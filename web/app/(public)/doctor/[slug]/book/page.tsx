@@ -87,10 +87,10 @@ export default async function BookDoctorPage({
                   <VerifiedBadge size="sm" />
                 </div>
                 <div className="text-[12.5px] font-medium text-ge-primary">
-                  {doctor.specialties[0]?.specialty.nameEn ?? "Specialist"}
+                  {doctor.specialties?.[0]?.specialty?.nameEn ?? "Specialist"}
                 </div>
                 <div className="text-[11.5px] text-ge-muted truncate">
-                  {doctor.city.nameEn} {doctor.clinic ? `· ${doctor.clinic}` : ""}
+                  {doctor.city?.nameEn ?? "Pakistan"} {doctor.clinic ? `· ${doctor.clinic}` : ""}
                 </div>
               </div>
             </div>

@@ -26,10 +26,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!doctor || doctor.verifiedStatus !== "APPROVED") {
     return { title: "Doctor not found" };
   }
-  const specialty = doctor.specialties[0]?.specialty.nameEn ?? "Specialist";
+  const specialty = doctor.specialties?.[0]?.specialty?.nameEn ?? "Specialist";
   return {
-    title: `${doctor.user.name} — ${specialty} in ${doctor.city.nameEn}`,
-    description: `Book a verified ${specialty.toLowerCase()} consultation with ${doctor.user.name} in ${doctor.city.nameEn}. PMDC-verified, live availability, video or clinic.`,
+    title: `${doctor.user.name} — ${specialty} in ${doctor.city?.nameEn ?? "Pakistan"}`,
+    description: `Book a verified ${specialty.toLowerCase()} consultation with ${doctor.user.name} in ${doctor.city?.nameEn ?? "Pakistan"}. PMDC-verified, live availability, video or clinic.`,
   };
 }
 
@@ -152,15 +152,15 @@ export default async function DoctorProfilePage({
     name: doctor.user.name,
     url: `${baseUrl}/doctor/${doctor.slug}`,
     image: doctor.user.image ?? undefined,
-    medicalSpecialty: doctor.specialties.map((s) => s.specialty.nameEn),
+    medicalSpecialty: doctor.specialties?.map((s) => s.specialty?.nameEn).filter(Boolean) as string[],
     address: {
       "@type": "PostalAddress",
-      addressLocality: doctor.city.nameEn,
+      addressLocality: doctor.city?.nameEn ?? "Pakistan",
       addressCountry: "PK",
     },
     aggregateRating: doctor.ratingCount > 0 ? {
       "@type": "AggregateRating",
-      ratingValue: doctor.ratingAvg,
+      ratingValue: doctor.ratingAvg ?? 0,
       reviewCount: doctor.ratingCount,
     } : undefined,
   };
@@ -203,17 +203,17 @@ export default async function DoctorProfilePage({
                   {isPatient && <SaveDoctorButton doctorId={doctor.id} initialSaved={initialSaved} className="ml-1" />}
                 </div>
                 <div className="mt-1 text-[13.5px] font-medium text-ge-primary">
-                  {doctor.specialties.map((s) => s.specialty.nameEn).join(" · ")}
+                  {doctor.specialties?.map((s) => s.specialty?.nameEn).filter(Boolean).join(" · ") || "Specialist"}
                 </div>
                 <div className="mt-0.5 text-[12.5px] text-ge-muted">{doctor.qualifications}</div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-ge-muted">
                   <span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {doctor.experienceYears} yrs exp</span>
-                  <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {doctor.clinic ?? doctor.city.nameEn}</span>
+                  <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {doctor.clinic ?? doctor.city?.nameEn ?? "Pakistan"}</span>
                   <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" /> {doctor.languages.join(", ")}</span>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-0 rounded-2xl bg-ge-soft-bg p-3 sm:p-4">
                   {[
-                    { v: `${doctor.ratingAvg.toFixed(1)}★`, l: `${doctor.ratingCount} reviews` },
+                    { v: `${(doctor.ratingAvg ?? 0).toFixed(1)}★`, l: `${doctor.ratingCount ?? 0} reviews` },
                     { v: `${doctor.satisfactionPct}%`, l: "Satisfied" },
                     { v: `~${20} min`, l: "Avg slot" },
                     { v: `${doctor.modes.length}`, l: "Modes" },

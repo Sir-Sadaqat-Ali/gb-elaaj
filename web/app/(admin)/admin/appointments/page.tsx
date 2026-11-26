@@ -29,15 +29,15 @@ export default async function AdminAppointmentsPage() {
   const cols: Column<(typeof appts)[number]>[] = [
     {
       key: "p", header: "Patient", cell: (r) => (
-        <div className="flex items-center gap-2.5"><Avatar src={r.patient.user.image} name={r.patient.user.name} size={28} /><span className="text-[12.5px]">{r.patient.user.name}</span></div>
+        <div className="flex items-center gap-2.5"><Avatar src={r.patient?.user?.image ?? undefined} name={r.patient?.user?.name ?? "Patient"} size={28} /><span className="text-[12.5px]">{r.patient?.user?.name ?? "Patient"}</span></div>
       ),
     },
     {
       key: "d", header: "Doctor", cell: (r) => (
-        <div className="flex items-center gap-2.5"><Avatar src={r.doctor.user.image} name={r.doctor.user.name} size={28} /><span className="text-[12.5px]">{r.doctor.user.name}</span></div>
+        <div className="flex items-center gap-2.5"><Avatar src={r.doctor?.user?.image ?? undefined} name={r.doctor?.user?.name ?? "Doctor"} size={28} /><span className="text-[12.5px]">{r.doctor?.user?.name ?? "Doctor"}</span></div>
       ),
     },
-    { key: "spec", header: "Specialty", cell: (r) => r.doctor.specialties[0]?.specialty.nameEn ?? "—" },
+    { key: "spec", header: "Specialty", cell: (r) => r.doctor?.specialties?.[0]?.specialty?.nameEn ?? "—" },
     { key: "when", header: "Scheduled", cell: (r) => formatDateTime(r.scheduledFor) },
     { key: "fee", header: "Fee", align: "right", cell: (r) => <span className="ge-mono">{formatPkr(r.feePaisa)}</span> },
     { key: "status", header: "Status", cell: (r) => <StatusChip status={r.status as StatusKind} /> },

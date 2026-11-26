@@ -100,7 +100,7 @@ export function DoctorCard({
         <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ge-muted">
           <span className="inline-flex items-center gap-1">
             <Star className="h-3 w-3 fill-ge-star text-ge-star" />
-            <strong className="text-ge-ink">{doctor.ratingAvg.toFixed(1)}</strong>
+            <strong className="text-ge-ink">{(doctor.ratingAvg ?? 0).toFixed(1)}</strong>
             <span>({doctor.ratingCount})</span>
           </span>
           <span className="inline-flex items-center gap-1">

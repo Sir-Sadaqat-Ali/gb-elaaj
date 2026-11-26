@@ -53,7 +53,7 @@ export default async function DoctorPublicProfilePage({
                   <Badge variant="warning">{d.verifiedStatus === "PENDING" ? "Verification pending" : "Not verified"}</Badge>
                 )}
               </div>
-              <div className="text-[12px] text-ge-primary">{d.specialties[0]?.specialty.nameEn}</div>
+              <div className="text-[12px] text-ge-primary">{d.specialties?.[0]?.specialty?.nameEn ?? "General Practitioner"}</div>
               <div className="text-[11px] text-ge-muted">PMDC {d.pmdcNumber} · /{d.slug}</div>
             </div>
           </div>

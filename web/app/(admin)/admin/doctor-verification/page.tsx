@@ -43,7 +43,7 @@ export default async function AdminDoctorVerificationPage() {
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-semibold text-ge-ink">{d.user.name}</div>
                 <div className="text-[11.5px] text-ge-muted">
-                  {d.specialties[0]?.specialty.nameEn} · PMDC {d.pmdcNumber} · {d.city.nameEn}
+                  {d.specialties?.[0]?.specialty?.nameEn ?? "General"} · PMDC {d.pmdcNumber} · {d.city?.nameEn ?? "Pakistan"}
                 </div>
                 <div className="text-[10.5px] text-ge-muted">Submitted {formatDate(d.createdAt)}</div>
               </div>
@@ -60,7 +60,7 @@ export default async function AdminDoctorVerificationPage() {
             <Avatar src={d.user.image} name={d.user.name} size={32} />
             <div className="flex-1 min-w-0">
               <div className="text-[12.5px] font-medium text-ge-ink">{d.user.name}</div>
-              <div className="text-[10.5px] text-ge-muted">{d.specialties[0]?.specialty.nameEn}</div>
+              <div className="text-[10.5px] text-ge-muted">{d.specialties?.[0]?.specialty?.nameEn ?? "General"}</div>
             </div>
             <Badge variant={d.verifiedStatus === "APPROVED" ? "success" : "danger"}>{d.verifiedStatus}</Badge>
           </Card>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Calendar, Wallet, Star, Bell, Video, Building, Stethoscope } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/rbac";
@@ -24,7 +25,9 @@ export default async function DoctorDashboardPage() {
     where: { id: session.user.id },
     include: { doctor: { include: { specialties: { include: { specialty: true } } } } },
   });
-  if (!me?.doctor) return null;
+  if (!me?.doctor) {
+    redirect("/login");
+  }
 
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(); endOfDay.setHours(23, 59, 59, 999);
@@ -61,8 +64,8 @@ export default async function DoctorDashboardPage() {
     {
       key: "patient", header: "Patient", cell: (r) => (
         <div className="flex items-center gap-2.5">
-          <Avatar src={r.patient.user.image} name={r.patient.user.name} size={28} />
-          <span className="text-[12.5px]">{r.patient.user.name}</span>
+          <Avatar src={r.patient?.user?.image ?? undefined} name={r.patient?.user?.name ?? "Patient"} size={28} />
+          <span className="text-[12.5px]">{r.patient?.user?.name ?? "Patient"}</span>
         </div>
       ),
     },
@@ -80,7 +83,7 @@ export default async function DoctorDashboardPage() {
   return (
     <AppShell
       navItems={DOCTOR_NAV}
-      user={{ name: me.name, role: `${me.doctor.specialties[0]?.specialty.nameEn ?? "Doctor"} · PMDC`, image: me.image }}
+      user={{ name: me.name, role: `${me.doctor.specialties?.[0]?.specialty?.nameEn ?? "Doctor"} · PMDC`, image: me.image }}
       title="Today's clinic"
       subtitle={`${formatDate(new Date(), { weekday: "long", month: "long", day: "numeric" })} · ${todayCount} appointments scheduled`}
       search="Search patients, prescriptions…"
@@ -89,7 +92,7 @@ export default async function DoctorDashboardPage() {
         <Kpi label="Today's appointments" value={String(todayCount)} icon={Calendar} />
         <Kpi label="Completed (mo.)" value={String(monthCompleted)} icon={Bell} hint="Consults this month" />
         <Kpi label="This week earnings" value={formatPkrCompact(weekEarnings._sum.netPaisa ?? 0)} icon={Wallet} delta={formatPkrCompact(monthEarnings._sum.netPaisa ?? 0) + " mo"} deltaDir="up" />
-        <Kpi label="Patient rating" value={`${ratingAvg.toFixed(1)} ★`} icon={Star} />
+        <Kpi label="Patient rating" value={`${(ratingAvg ?? 0).toFixed(1)} ★`} icon={Star} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-[2fr_1fr]">

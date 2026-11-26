@@ -63,7 +63,7 @@ export default async function PatientAppointmentsPage({
     doctor: {
       name: a.doctor.user.name,
       image: a.doctor.user.image,
-      specialty: a.doctor.specialties[0]?.specialty.nameEn ?? "Specialist",
+      specialty: a.doctor.specialties?.[0]?.specialty?.nameEn ?? "Specialist",
     },
   }));
 
